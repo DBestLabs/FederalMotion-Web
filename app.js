@@ -9,7 +9,7 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KlgKi5KFxRqrMbGzZIVVSQ_-JM9OlON';
 const DAY_START=8*60, WARNING_TIME=24*60, DAY_END=26*60, MAX_HEAT=5, MAX_HEALTH=100;
 const DEFAULT_MOTION_TAX_RATE=.05;
 
-let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.2',error:null};
+let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.2',error:null,ownerBank:null,isOwner:false};
 let player=null, screen='start', payload=null;
 
 const DRUGS={
@@ -245,7 +245,7 @@ async function initBackend(){
   let {data:{session},error}=await fmBackend.client.auth.getSession();if(error)throw error;
   if(!session){const r=await fmBackend.client.auth.signInAnonymously();if(r.error)throw r.error;session=r.data.session}
   fmBackend.user=session?.user||null;if(!fmBackend.user)throw new Error('No authenticated player session.');
-  await loadRemoteSettings();fmBackend.ready=true;fmBackend.error=null;
+  await loadRemoteSettings();fmBackend.ready=true;fmBackend.error=null;await refreshOwnerBank();
   const local=loadGame();
   if(local){player=local;await ensurePlayerProfile();await syncCloudSave()}
   else{const cloud=await loadCloudSave();if(cloud){player=migratePlayer(cloud);localStorage.setItem(SAVE_KEY,JSON.stringify(player));screen='home'}}
@@ -257,6 +257,35 @@ async function loadRemoteSettings(){
  const {data,error}=await fmBackend.client.from('fm_game_settings').select('setting_key,setting_value').in('setting_key',['motion_tax_rate','game_version']);
  if(error)return;
  for(const row of data||[]){if(row.setting_key==='motion_tax_rate'){const n=Number(row.setting_value);if(Number.isFinite(n)&&n>=0&&n<=.25)fmBackend.taxRate=n}if(row.setting_key==='game_version'&&row.setting_value)fmBackend.gameVersion=String(row.setting_value)}
+}
+
+async function refreshOwnerBank(){
+ if(!fmBackend.ready||!fmBackend.client)return null;
+ const {data,error}=await fmBackend.client.rpc('fm_get_owner_bank');
+ if(error){
+  console.warn('Owner bank check:',error.message);
+  fmBackend.ownerBank=null;fmBackend.isOwner=false;
+  return null;
+ }
+ const row=Array.isArray(data)?data[0]:data;
+ if(row){
+  fmBackend.ownerBank=row;
+  fmBackend.isOwner=true;
+  return row;
+ }
+ fmBackend.ownerBank=null;fmBackend.isOwner=false;
+ return null;
+}
+
+async function withdrawOwnerFunds(amount){
+ amount=Math.floor(Number(amount)||0);
+ if(!fmBackend.isOwner||amount<=0)return {ok:false,error:'Invalid owner withdrawal'};
+ const {data,error}=await fmBackend.client.rpc('fm_spend_owner_bank',{spend_amount:amount});
+ if(error)return {ok:false,error:error.message};
+ player.cash_on_person+=amount;
+ await refreshOwnerBank();
+ saveGame();
+ return {ok:true,new_balance:Number(data)};
 }
 async function ensurePlayerProfile(){
  if(!fmBackend.ready||!fmBackend.user||!player)return;
@@ -290,7 +319,8 @@ function queueMotionTax(tax){if(!tax||tax<=0)return;let q=[];try{q=JSON.parse(lo
 async function flushTaxQueue(){
  if(!fmBackend.ready||!fmBackend.client)return;let q=[];try{q=JSON.parse(localStorage.getItem(TAX_QUEUE_KEY)||'[]')}catch{}if(!q.length)return;
  const remain=[];for(const item of q){const {error}=await fmBackend.client.rpc('fm_collect_motion_tax_v2',{event_id:item.event_id,tax_amount:item.tax_amount});if(error){console.warn('Motion Tax pending:',error.message);remain.push(item)}}
- localStorage.setItem(TAX_QUEUE_KEY,JSON.stringify(remain))
+ localStorage.setItem(TAX_QUEUE_KEY,JSON.stringify(remain));
+ if(fmBackend.isOwner) await refreshOwnerBank();
 }
 function taxedPurchase(base){const q=purchaseQuote(base);if(player.cash_on_person<q.total)return{ok:false,...q};player.cash_on_person-=q.total;queueMotionTax(q.tax);addSkillXP('business',Math.max(2,Math.floor(base/250)));return{ok:true,...q}}
 
@@ -315,7 +345,7 @@ function render(){
   black:renderBlack,weapons:renderWeapons,armor:renderArmor,equip:renderEquip,crew:renderCrew,map:renderMap,stash:renderStash,
   upgrades:renderUpgrades,hospital:renderHospital,status:renderStatus,market:renderMarket,phone:renderPhone,objectives:renderObjectives,
   achievements:renderAchievements,skills:renderSkills,laylow:renderLayLow,vehicles:renderVehicles,properties:renderProperties,
-  howto:renderHowTo,patch:renderPatchNotes,leaderboard:renderLeaderboard
+  howto:renderHowTo,patch:renderPatchNotes,leaderboard:renderLeaderboard,ownerWallet:renderOwnerWallet
  };
  if(screen==='supplierShop')html+=renderSupplierShop(payload);else html+=(map[screen]||renderHome)();
  app().innerHTML=html+`<div class="footer-note">${fmBackend.ready?'Local save + cloud sync active.':'Local save active. Cloud will sync when connected.'}</div>`;
@@ -331,6 +361,7 @@ function renderHome(){
  const hot=player.heat>=4?`<div class="notice">🚨 HIGH HEAT — success odds, supplier pressure and overnight risk are worse. Use Lay Low if you need to cool off.</div>`:'';
  return `${late}${hot}<div class="section-title">WHAT'S THE MOVE?</div><div class="actions">
  ${btn('📱 Phone','phone',PHONES[player.phone_id].name)}
+ ${fmBackend.isOwner?btn('💰 Owner Wallet','ownerWallet',`Tax balance ${money(fmBackend.ownerBank?.balance||0)}`,'good'):''}
  ${btn('Make a Move','moves','Jobs, robberies & heists')}
  ${btn('Street Move','street','Move carried inventory')}
  ${btn('Supplier','supplier','Buy inventory from contacts')}
@@ -481,6 +512,19 @@ function renderPatchNotes(){return `${btn('← Start','start','','back')}<div cl
  <div class="result-line">BALANCE: Every robbery requires a weapon; major jobs require stronger weapon tiers.</div>
  <div class="result-line">BALANCE: High heat hurts success odds, supplier prices and overnight safety instead of simply locking the game.</div>
  </div></div>`}
+function renderOwnerWallet(){
+ if(!fmBackend.isOwner)return `${back()}<div class="card">Owner access required.</div>`;
+ const b=fmBackend.ownerBank||{balance:0,total_tax_collected:0,total_tax_events:0};
+ return `${back()}<div class="card"><div class="section-title">OWNER WALLET</div>
+ ${stat('Spendable Balance',money(b.balance||0))}
+ ${stat('Lifetime Motion Tax',money(b.total_tax_collected||0))}
+ ${stat('Tax Events',b.total_tax_events||0)}
+ ${stat('Player Cash',money(player.cash_on_person))}
+ <hr><div class="muted">Move tax money into your character cash so you can spend it anywhere in the game.</div>
+ <label>Withdraw amount</label><input id="ownerWithdrawAmount" type="number" min="1" step="1" value="100">
+ <div style="margin-top:10px">${btn('Withdraw To Player Cash','ownerWithdraw','','good')}</div>
+ </div>`;
+}
 function renderLeaderboard(){return `${back()}<div class="card"><div class="section-title">ONLINE LEADERBOARD</div><div id="leaderboardBox" class="muted">Loading rankings…</div></div>`}
 
 function travelTime(base){const v=VEHICLES[player.active_vehicle]||VEHICLES.bicycle;return Math.max(10,Math.floor(base*v.speed))}
@@ -534,12 +578,21 @@ function handle(action){
  if(action==='deleteSave'){if(confirm('Delete your Federal Motion local save?')){localStorage.removeItem(SAVE_KEY);localStorage.removeItem(LEGACY_SAVE_KEY);player=null;screen='start';render()}return}
  if(action==='start'){screen='start';render();return}
  if(action==='home'){screen='home';payload=null;render();return}
- const direct=['moves','street','supplier','black','weapons','armor','equip','crew','map','stash','upgrades','hospital','status','market','phone','objectives','achievements','skills','laylow','vehicles','properties','howto','patch','leaderboard'];
+ const direct=['moves','street','supplier','black','weapons','armor','equip','crew','map','stash','upgrades','hospital','status','market','phone','objectives','achievements','skills','laylow','vehicles','properties','howto','patch','leaderboard','ownerWallet'];
  if(direct.includes(action)){screen=action;payload=null;render();if(action==='leaderboard')setTimeout(loadLeaderboard,0);return}
  if(action==='phoneShop'){screen='phoneShop';payload=null;app().innerHTML=header()+renderPhoneShop()+`<div class="footer-note">Local + cloud save active.</div>`;return}
  if(action==='phoneMessages'){app().innerHTML=header()+renderMessages()+`<div class="footer-note">Local + cloud save active.</div>`;return}
  if(action==='phoneAlerts'){app().innerHTML=header()+renderAlerts()+`<div class="footer-note">Local + cloud save active.</div>`;return}
  if(action==='save'){saveGame();result('GAME SAVED',['Local save updated.','Cloud sync requested.']);return}
+ if(action==='ownerWithdraw'){
+  const amount=Math.floor(Number($('#ownerWithdrawAmount')?.value||0));
+  if(amount<=0){result('OWNER WALLET',['Enter a valid amount.']);return}
+  withdrawOwnerFunds(amount).then(r=>{
+   if(!r.ok){result('OWNER WALLET',[r.error||'Withdrawal failed.']);return}
+   result('OWNER WITHDRAWAL',[`Owner Wallet: -${money(amount)}`,`Player Cash: +${money(amount)}`,`Owner Wallet Remaining: ${money(r.new_balance)}`]);
+  });
+  return;
+ }
  if(action==='sleep'){endDay();return}
  if(action.startsWith('doMove:')){performMove(action.split(':')[1]);return}
  if(action.startsWith('supplier:')){const n=action.split(':')[1];if((n==='Doc'&&player.respect<3)||(n==='Ghost'&&player.respect<8)){result('NOT YET',[n==='Doc'?'Doc: Come back when people know your name.':'Ghost isn’t interested yet.']);return}travelTo('supplier');if(screen==='result')return;screen='supplierShop';payload=n;render();return}
