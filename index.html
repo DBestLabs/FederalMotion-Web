@@ -7,11 +7,10 @@
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
-  <title>Federal Motion — Alpha 0.3</title>
+  <title>Federal Motion — Alpha 0.4</title>
   <script>
-    // Alpha updater: force the newest UI files whenever the page is loaded/refreshed.
     const FM_BUILD = Date.now();
-    document.write('<link rel="stylesheet" href="styles.css?v=0.3.5?v=' + FM_BUILD + '">');
+    document.write('<link rel="stylesheet" href="styles.css?v=' + FM_BUILD + '">');
   </script>
 </head>
 <body>
@@ -19,7 +18,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
     const fmScript = document.createElement('script');
-    fmScript.src = 'app.js?v=0.3.5?v=' + FM_BUILD;
+    fmScript.src = 'app.js?v=' + FM_BUILD;
     document.body.appendChild(fmScript);
   </script>
 </body>

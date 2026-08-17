@@ -4,13 +4,14 @@ const SAVE_KEY='federal_motion_web_save_v2';
 const LEGACY_SAVE_KEY='federal_motion_web_save_v1';
 const TAX_QUEUE_KEY='federal_motion_tax_queue_v1';
 const LOSS_QUEUE_KEY='federal_motion_owner_loss_queue_v1';
+const UPKEEP_QUEUE_KEY='federal_motion_owner_upkeep_queue_v1';
 const SUPABASE_URL='https://nrqgmlofflbnwhbywfbc.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KlgKi5KFxRqrMbGzZIVVSQ_-JM9OlON';
 
 const DAY_START=8*60, WARNING_TIME=24*60, DAY_END=26*60, MAX_HEAT=5, MAX_HEALTH=100;
 const DEFAULT_MOTION_TAX_RATE=.05;
 
-let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.3',error:null,ownerBank:null,isOwner:false,ownerDashboard:null};
+let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.4',error:null,ownerBank:null,isOwner:false,ownerDashboard:null};
 let player=null, screen='start', payload=null;
 
 const DRUGS={
@@ -67,6 +68,20 @@ const PROPERTIES={
  business_front:{name:'Business Front',price:65000,type:'Business',storage:2,security:3,status:8},
  luxury_home:{name:'Luxury Property',price:120000,type:'Home',storage:3,security:4,status:12},
 };
+
+const PROPERTY_ECONOMY={
+ starter_trap:{income:[0,0],upkeep:0},
+ apartment:{income:[0,0],upkeep:20},
+ garage_property:{income:[10,45],upkeep:35},
+ second_trap:{income:[90,190],upkeep:65},
+ warehouse_property:{income:[180,360],upkeep:130},
+ business_front:{income:[300,650],upkeep:220},
+ luxury_home:{income:[0,0],upkeep:275},
+};
+const VEHICLE_UPKEEP={bicycle:0,beater:12,muscle:30,suv:42,sport:65,executive:90};
+const CREW_UPKEEP={rico:18,ace:30,brick:40,nova:48,saint:55};
+const PHONE_UPKEEP={burner:0,budget:4,premium:12,elite:25};
+
 
 const PHONES={
  burner:{name:'Burner Phone',price:0,tier:1,apps:['messages','contacts']},
@@ -126,21 +141,21 @@ const stars=h=>'★'.repeat(clamp(h,0,5))+'☆'.repeat(5-clamp(h,0,5));
 const formatTime=m=>{const x=((m%(24*60))+(24*60))%(24*60),h=Math.floor(x/60),min=x%60,ap=h<12?'AM':'PM';return `${h%12||12}:${String(min).padStart(2,'0')} ${ap}`};
 const escapeHtml=s=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 
-const ICONS={phone:'📱',cash:'💵',heat:'🚨',health:'❤️',xp:'⚡',respect:'👑',weapon:'🔫',armor:'🛡️',ride:'🚗',jobs:'🎯',street:'🧱',supplier:'🤝',market:'🛒',crew:'👥',map:'🗺️',garage:'🏎️',property:'🏠',stash:'📦',upgrade:'🛠️',laylow:'🌙',skills:'📈',objectives:'📋',achievements:'🏆',hospital:'🏥',status:'📊',sleep:'🛏️',save:'💾',owner:'💰',dashboard:'🛰️',alert:'⚠️'};
+const ICONS={phone:'📱',cash:'💵',heat:'🚨',health:'❤️',xp:'⚡',respect:'👑',weapon:'🔫',armor:'🛡️',ride:'🚗',jobs:'🎯',street:'🧱',supplier:'🤝',market:'🛒',crew:'👥',map:'🗺️',garage:'🏎️',property:'🏠',stash:'📦',upgrade:'🛠️',laylow:'🌙',skills:'📈',objectives:'📋',achievements:'🏆',hospital:'🏥',status:'📊',sleep:'🛏️',save:'💾',owner:'💰',dashboard:'🛰️',bank:'🏦',profile:'🪪',alert:'⚠️'};
 function icon(k){return ICONS[k]||'•'}
 function meter(label,value,max,cls=''){const pct=clamp((Number(value)||0)/Math.max(1,max)*100,0,100);return `<div class="meter-block ${cls}"><div class="meter-label"><span>${escapeHtml(label)}</span><strong>${Math.round(value)}/${Math.round(max)}</strong></div><div class="meter"><div style="width:${pct}%"></div></div></div>`}
 
 function emptyDrugInventory(){return Object.fromEntries(Object.keys(DRUGS).map(k=>[k,0]))}
 function newPlayer(name='Player'){
  return {
-  name,day:1,time:DAY_START,level:1,xp:0,respect:0,heat:0,health:100,cash_on_person:0,location:'trap',
+  name,day:1,time:DAY_START,level:1,xp:0,respect:0,heat:0,health:100,cash_on_person:0,bank_cash:0,bills_due:0,location:'trap',
   phone_id:'burner',equipped_weapon:null,equipped_armor:null,weapon_inventory:[],armor_inventory:[],crew:[],
   carried_drugs:emptyDrugInventory(),vehicles:['bicycle'],active_vehicle:'bicycle',properties:['starter_trap'],
   trap:{cash:0,drug_stash:emptyDrugInventory(),weapons:[],armor:[],security:0,storage:1,condition:1,attention:0},
   market:Object.fromEntries(Object.keys(DRUGS).map(k=>[k,1])),supplier_trust:{Smoke:0,Doc:0,Ghost:0},
   skills:{combat:{xp:0,level:1},street:{xp:0,level:1},charisma:{xp:0,level:1},driving:{xp:0,level:1},business:{xp:0,level:1},endurance:{xp:0,level:1}},
   achievements:[],messages:[{from:'Unknown',text:'Everybody starts somewhere. Get some motion.'}],
-  stats:{moves:0,successful_moves:0,failed_moves:0,hospital_visits:0,arrests:0,days_survived:1,biggest_score:0,highest_heat:0,total_earned:0},
+  stats:{moves:0,successful_moves:0,failed_moves:0,hospital_visits:0,arrests:0,days_survived:1,biggest_score:0,highest_heat:0,total_earned:0,total_expenses:0,total_property_income:0,random_events:0,total_banked:0,job_counts:{}},
   daily:{}
  };
 }
@@ -160,12 +175,16 @@ function migratePlayer(p){
  if(!Array.isArray(p.properties))p.properties=['starter_trap'];
  if(!Array.isArray(p.achievements))p.achievements=[];
  if(!Array.isArray(p.messages))p.messages=d.messages;
+ if(!Number.isFinite(p.bank_cash))p.bank_cash=0;
+ if(!Number.isFinite(p.bills_due))p.bills_due=0;
+ if(!p.stats.job_counts||typeof p.stats.job_counts!=='object')p.stats.job_counts={};
+ for(const k of ['total_expenses','total_property_income','random_events','total_banked'])if(!Number.isFinite(p.stats[k]))p.stats[k]=0;
  if(!p.daily||typeof p.daily!=='object')p.daily={};
  if(!p.daily.job_counts||typeof p.daily.job_counts!=='object')p.daily.job_counts={};
  if(!Number.isFinite(p.daily.moves_attempted))p.daily.moves_attempted=(p.daily.successes||0)+(p.daily.failures||0);
  return p;
 }
-function resetDaily(){player.daily={cash_start:player.cash_on_person+player.trap.cash,xp_start:player.xp,respect_start:player.respect,heat_start:player.heat,successes:0,failures:0,job_counts:{},moves_attempted:0}}
+function resetDaily(){player.daily={cash_start:player.cash_on_person+player.trap.cash+(player.bank_cash||0),xp_start:player.xp,respect_start:player.respect,heat_start:player.heat,successes:0,failures:0,job_counts:{},moves_attempted:0}}
 function saveGame(){if(!player)return;localStorage.setItem(SAVE_KEY,JSON.stringify(player));if(fmBackend.ready)syncCloudSave()}
 function loadGame(){try{return migratePlayer(JSON.parse(localStorage.getItem(SAVE_KEY)||localStorage.getItem(LEGACY_SAVE_KEY)))}catch{return null}}
 function hasSave(){return !!(localStorage.getItem(SAVE_KEY)||localStorage.getItem(LEGACY_SAVE_KEY))}
@@ -186,7 +205,7 @@ function levelProgress(){const a=currentLevelXp(),b=nextLevelXp();return clamp((
 
 function totalNetWorth(){
  if(!player)return 0;
- let v=player.cash_on_person+player.trap.cash;
+ let v=player.cash_on_person+player.trap.cash+(player.bank_cash||0);
  Object.entries(player.trap.drug_stash).forEach(([id,g])=>v+=Math.floor(g*DRUGS[id].base_value));
  player.trap.weapons.forEach(x=>v+=WEAPONS[x.id]?.price||0);
  player.weapon_inventory.forEach(x=>v+=WEAPONS[x.id]?.price||0);
@@ -259,7 +278,7 @@ async function initBackend(){
   else{const cloud=await loadCloudSave();if(cloud){player=migratePlayer(cloud);localStorage.setItem(SAVE_KEY,JSON.stringify(player))}}
   screen='start';
   payload=null;
-  await flushTaxQueue();await flushOwnerLossQueue();render();
+  await flushTaxQueue();await flushOwnerLossQueue();await flushOwnerUpkeepQueue();render();
  }catch(err){console.error('Federal Motion backend:',err);fmBackend.error=err?.message||String(err);fmBackend.ready=false;render()}
 }
 async function loadRemoteSettings(){
@@ -366,6 +385,38 @@ async function flushOwnerLossQueue(){
  if(fmBackend.isOwner)await refreshOwnerBank();
 }
 
+function queueOwnerUpkeep(amount,source='upkeep'){
+ amount=Math.max(0,Math.floor(Number(amount)||0));
+ if(amount<=0)return;
+ let q=[];
+ try{q=JSON.parse(localStorage.getItem(UPKEEP_QUEUE_KEY)||'[]')}catch{}
+ q.push({event_id:makeUuid(),amount,source:String(source||'upkeep')});
+ localStorage.setItem(UPKEEP_QUEUE_KEY,JSON.stringify(q));
+ flushOwnerUpkeepQueue();
+}
+
+async function flushOwnerUpkeepQueue(){
+ if(!fmBackend.ready||!fmBackend.client)return;
+ let q=[];
+ try{q=JSON.parse(localStorage.getItem(UPKEEP_QUEUE_KEY)||'[]')}catch{}
+ if(!q.length)return;
+
+ const remain=[];
+ for(const item of q){
+  const {error}=await fmBackend.client.rpc('fm_collect_owner_upkeep',{
+   p_event_id:item.event_id,
+   p_amount:item.amount,
+   p_source:item.source
+  });
+  if(error){
+   console.warn('Owner upkeep pending:',error.message);
+   remain.push(item);
+  }
+ }
+ localStorage.setItem(UPKEEP_QUEUE_KEY,JSON.stringify(remain));
+ if(fmBackend.isOwner)await refreshOwnerBank();
+}
+
 function header(){
  if(!player)return `<div class="hero"><div class="hero-kicker">DBEST LABS PRESENTS</div><div class="logo">FEDERAL MOTION</div><div class="sublogo">${escapeHtml(fmBackend.gameVersion)} · ${backendStatusText()}</div></div>`;
  const s=stageInfo();
@@ -386,10 +437,35 @@ function render(){
   black:renderBlack,weapons:renderWeapons,armor:renderArmor,equip:renderEquip,crew:renderCrew,map:renderMap,stash:renderStash,
   upgrades:renderUpgrades,hospital:renderHospital,status:renderStatus,market:renderMarket,phone:renderPhone,objectives:renderObjectives,
   achievements:renderAchievements,skills:renderSkills,laylow:renderLayLow,vehicles:renderVehicles,properties:renderProperties,
-  howto:renderHowTo,patch:renderPatchNotes,leaderboard:renderLeaderboard,ownerWallet:renderOwnerWallet,ownerDashboard:renderOwnerDashboard
+  howto:renderHowTo,patch:renderPatchNotes,leaderboard:renderLeaderboard,bank:renderBank,profile:renderProfile,moveConfirm:renderMoveConfirm,ownerWallet:renderOwnerWallet,ownerDashboard:renderOwnerDashboard
  };
  if(screen==='supplierShop')html+=renderSupplierShop(payload);else html+=(map[screen]||renderHome)();
  app().innerHTML=html+`<div class="footer-note">${fmBackend.ready?'Local save + cloud sync active.':'Local save active. Cloud will sync when connected.'}</div>`;
+}
+
+
+function renderMoveConfirm(){
+ const id=payload?.moveId,m=MOVES[id];
+ if(!m)return `${back()}<div class="card">Move unavailable.</div>`;
+ const chance=successChance(m,id),pay=currentMovePayout(id,m),risks=riskItemsForMove(m);
+ const danger=chance>=90?'RARE FAILURE STILL POSSIBLE':chance>=70?'RISK PRESENT':'HIGH RISK';
+ return `<div class="card risk-confirm">
+  <div class="risk-kicker">⚠️ ${danger}</div>
+  <h2>${escapeHtml(m.name)}</h2>
+  <div class="risk-copy">If this move goes bad, you could lose cash, gear, health, or get arrested depending on the outcome.</div>
+  <div class="job-metrics">
+   <div><span>SUCCESS</span><strong>${chance}%</strong></div>
+   <div><span>PAYOUT</span><strong>${money(pay[0])}–${money(pay[1])}</strong></div>
+   <div><span>HEAT</span><strong>+${m.heat}★</strong></div>
+   <div><span>TIME</span><strong>${m.minutes[0]}–${m.minutes[1]}m</strong></div>
+  </div>
+  ${(prepBreakdown(m,id).crewBonus||prepBreakdown(m,id).gearBonus)?`<div class="notice good">PREP BONUS ACTIVE · Extra crew and/or stronger gear are helping.</div>`:''}
+  <div class="section-title">ODDS BREAKDOWN</div>
+  <div class="odds-box">${oddsBreakdownHtml(m,id)}<div class="odds-final"><span>FINAL</span><strong>${chance}%</strong></div></div>
+  <div class="section-title">WHAT YOU COULD LOSE</div>
+  <div class="risk-list">${risks.length?risks.map(x=>`<div>• ${escapeHtml(x)}</div>`).join(''):'<div>• No major carried assets.</div>'}</div>
+  <div class="actions risk-actions">${btn('GO ANYWAY',`confirmMove:${id}`,'Accept the risk','danger')}${btn('BACK OUT','moves','','back')}</div>
+ </div>`;
 }
 
 function renderQuickWeaponPicker(){
@@ -464,6 +540,8 @@ function renderHome(){
  ${menuCard(icon('garage'),'Garage','Vehicles & active ride','vehicles','garage')}
  ${menuCard(icon('property'),'Properties','Own multiple locations','properties','property')}
  ${menuCard(icon('stash'),'Trap Stash','Cash, inventory & weapons','stash','stash')}
+ ${menuCard(icon('bank'),'Cash Reserve',`Protected cash ${money(player.bank_cash||0)}`,'bank','stash')}
+ ${menuCard(icon('profile'),'Player Profile','Career stats & records','profile','status')}
  ${menuCard(icon('upgrade'),'Trap Upgrades','Security, storage, condition','upgrades','upgrade')}
  ${menuCard(icon('laylow'),'Lay Low','Reduce heat with time','laylow','laylow')}
  ${menuCard(icon('skills'),'Skills','Natural progression','skills','skills')}
@@ -491,7 +569,7 @@ function difficulty(m){
  return{key:'black',label:'⚫ BLACK'};
 }
 function renderMoves(){
- const items=Object.entries(MOVES).map(([id,m])=>{const r=requirement(m),chance=successChance(m,id),d=difficulty(m),crewReq=m.requires_crew||0,wt=m.weapon_tier||0,repeats=jobRepeatCount(id),pay=currentMovePayout(id,m),spam=repeats?`<div class="notice warning">This move is getting hot · repeated ${repeats}× today · payout and odds reduced.</div>`:'';return `<div class="job-card ${d.key}"><div class="job-banner"><span>${escapeHtml(m.name)}</span><span class="difficulty ${d.key}">${d.label}</span></div><div class="job-metrics"><div><span>SUCCESS</span><strong>${chance}%</strong></div><div><span>PAYOUT</span><strong>${money(pay[0])}–${money(pay[1])}</strong></div><div><span>TIME</span><strong>${m.minutes[0]}–${m.minutes[1]}m</strong></div><div><span>HEAT</span><strong>+${m.heat}★</strong></div></div>${spam}<div class="job-reqs"><span>📍 ${escapeHtml(LOCATIONS[m.location].name)}</span><span>${wt?`🔫 Tier ${wt}+`:'🔫 No weapon req.'}</span><span>👥 Crew ${crewReq}</span><span>❤️ ${player.health}/100</span></div>${r?`<div class="locked-banner">LOCKED · ${escapeHtml(r)}</div>`:''}<div class="job-action">${btn(r?'Locked':'Do Move',`doMove:${id}`,r?'Meet requirements first':'Attempt this move',r?'':'primary')}</div></div>`}).join('');
+ const items=Object.entries(MOVES).map(([id,m])=>{const r=requirement(m),chance=successChance(m,id),d=difficulty(m),crewReq=m.requires_crew||0,wt=m.weapon_tier||0,repeats=jobRepeatCount(id),pay=currentMovePayout(id,m),spam=repeats?`<div class="notice warning">This move is getting hot · repeated ${repeats}× today · payout and odds reduced.</div>`:'';return `<div class="job-card ${d.key}"><div class="job-banner"><span>${escapeHtml(m.name)}</span><span class="difficulty ${d.key}">${d.label}</span></div><div class="job-metrics"><div><span>SUCCESS</span><strong>${chance}%</strong></div><div><span>PAYOUT</span><strong>${money(pay[0])}–${money(pay[1])}</strong></div><div><span>TIME</span><strong>${m.minutes[0]}–${m.minutes[1]}m</strong></div><div><span>HEAT</span><strong>+${m.heat}★</strong></div></div>${spam}${(prepBreakdown(m,id).crewBonus||prepBreakdown(m,id).gearBonus)?`<div class="notice good">PREP BONUS ACTIVE · Extra preparation is increasing your odds.</div>`:''}<div class="job-reqs"><span>📍 ${escapeHtml(LOCATIONS[m.location].name)}</span><span>${wt?`🔫 Tier ${wt}+`:'🔫 No weapon req.'}</span><span>👥 Crew ${crewReq}</span><span>❤️ ${player.health}/100</span></div><details class="odds-details"><summary>Why ${chance}%?</summary><div class="odds-box">${oddsBreakdownHtml(m,id)}<div class="odds-final"><span>FINAL</span><strong>${chance}%</strong></div></div></details>${r?`<div class="locked-banner">LOCKED · ${escapeHtml(r)}</div>`:''}<div class="job-action">${btn(r?'Locked':'Do Move',`doMove:${id}`,r?'Meet requirements first':'Attempt this move',r?'':'primary')}</div></div>`}).join('');
  return `${back()}<div class="section-title">JOB READINESS</div><div class="legend-row"><span>🟢 Favorable</span><span>🟡 Risky</span><span>🔴 Dangerous</span><span>⚫ Extreme</span></div><div class="job-list">${items}</div>`;
 }
 
@@ -580,9 +658,75 @@ function renderVehicles(){
  <div class="section-title">VEHICLE MARKET</div><div class="list">${Object.entries(VEHICLES).filter(([id])=>!player.vehicles.includes(id)).map(([id,v])=>{const q=purchaseQuote(v.price);return `<div class="item"><div class="item-head"><span>${v.name}</span><span>${money(q.total)}</span></div><div class="item-meta">Speed ${Math.round((1-v.speed)*100)} · Storage ${v.storage} · Attention ${v.attention} · Reliability ${v.reliability}% · Tax ${money(q.tax)}</div>${btn('Buy Vehicle',`buyVehicle:${id}`,'','primary')}</div>`}).join('')}</div>`;
 }
 function renderProperties(){
- return `${back()}<div class="card"><div class="section-title">OWNED LOCATIONS</div>${player.properties.map(id=>`<div class="item"><div class="item-head"><span>${PROPERTIES[id].name}</span><span>${PROPERTIES[id].type}</span></div><div class="item-meta">Storage +${PROPERTIES[id].storage} · Security +${PROPERTIES[id].security} · Status +${PROPERTIES[id].status}</div></div>`).join('')}</div>
- <div class="section-title">PROPERTY MARKET</div><div class="list">${Object.entries(PROPERTIES).filter(([id])=>!player.properties.includes(id)).map(([id,p])=>{const q=purchaseQuote(p.price);return `<div class="item"><div class="item-head"><span>${p.name}</span><span>${money(q.total)}</span></div><div class="item-meta">${p.type} · Storage +${p.storage} · Security +${p.security} · Status +${p.status} · Tax ${money(q.tax)}</div>${btn('Buy Property',`buyProperty:${id}`,'','primary')}</div>`}).join('')}</div>`;
+ return `${back()}<div class="card"><div class="section-title">OWNED LOCATIONS</div>${player.properties.map(id=>`<div class="item"><div class="item-head"><span>${PROPERTIES[id].name}</span><span>${PROPERTIES[id].type}</span></div><div class="item-meta">Storage +${PROPERTIES[id].storage} · Security +${PROPERTIES[id].security} · Status +${PROPERTIES[id].status} · Daily income ${money(PROPERTY_ECONOMY[id]?.income?.[0]||0)}–${money(PROPERTY_ECONOMY[id]?.income?.[1]||0)} · Upkeep ${money(PROPERTY_ECONOMY[id]?.upkeep||0)}</div></div>`).join('')}</div>
+ <div class="section-title">PROPERTY MARKET</div><div class="list">${Object.entries(PROPERTIES).filter(([id])=>!player.properties.includes(id)).map(([id,p])=>{const q=purchaseQuote(p.price);return `<div class="item"><div class="item-head"><span>${p.name}</span><span>${money(q.total)}</span></div><div class="item-meta">${p.type} · Storage +${p.storage} · Security +${p.security} · Status +${p.status} · Income ${money(PROPERTY_ECONOMY[id]?.income?.[0]||0)}–${money(PROPERTY_ECONOMY[id]?.income?.[1]||0)}/day · Upkeep ${money(PROPERTY_ECONOMY[id]?.upkeep||0)}/day · Tax ${money(q.tax)}</div>${btn('Buy Property',`buyProperty:${id}`,'','primary')}</div>`}).join('')}</div>`;
 }
+
+function dailyExpenseEstimate(){
+ let n=0;
+ player.properties.forEach(id=>n+=(PROPERTY_ECONOMY[id]?.upkeep||0));
+ player.vehicles.forEach(id=>n+=(VEHICLE_UPKEEP[id]||0));
+ player.crew.forEach(id=>n+=(CREW_UPKEEP[id]||0));
+ n+=(PHONE_UPKEEP[player.phone_id]||0);
+ return Math.max(0,Math.floor(n));
+}
+function propertyIncomeEstimate(){
+ let lo=0,hi=0;
+ player.properties.forEach(id=>{const a=PROPERTY_ECONOMY[id]?.income||[0,0];lo+=a[0];hi+=a[1]});
+ return [lo,hi];
+}
+function renderBank(){
+ const inc=propertyIncomeEstimate(),up=dailyExpenseEstimate();
+ return `${back()}<div class="card"><div class="section-title">CASH RESERVE</div>
+ <div class="status-grid">${stat('On Person',money(player.cash_on_person))}${stat('Trap Cash',money(player.trap.cash))}${stat('Protected Reserve',money(player.bank_cash||0))}${stat('Bills Due',money(player.bills_due||0))}</div>
+ <div class="muted" style="margin-top:10px">Reserve cash is protected from carried-cash arrest, robbery and hospital losses. Deposits and withdrawals are handled from your trap.</div></div>
+ <div class="card"><div class="section-title">DAILY ECONOMY</div>
+ <div class="status-grid">${stat('Estimated Upkeep',money(up))}${stat('Property Income',`${money(inc[0])}–${money(inc[1])}`)}</div>
+ <div class="muted" style="margin-top:8px">Higher-tier property can earn passive income, but vehicles, phones, crew and property create daily upkeep.</div></div>
+ <div class="card"><div class="section-title">MOVE CASH</div>
+ <input id="bankAmount" type="number" min="1" step="1" value="100">
+ <div class="actions" style="margin-top:10px">${btn('Deposit From Pocket','bankDeposit','','primary')}${btn('Withdraw To Pocket','bankWithdraw')}${player.bills_due>0?btn('Pay Bills','payBills',`Due ${money(player.bills_due)}`,'good'):''}</div></div>`;
+}
+function favoriteMove(){
+ const entries=Object.entries(player.stats.job_counts||{});
+ if(!entries.length)return 'None yet';
+ entries.sort((a,b)=>b[1]-a[1]);
+ return MOVES[entries[0][0]]?.name||'Unknown';
+}
+function winRate(){
+ const total=(player.stats.successful_moves||0)+(player.stats.failed_moves||0);
+ return total?Math.round((player.stats.successful_moves||0)/total*100):0;
+}
+function renderProfile(){
+ const s=stageInfo();
+ return `${back()}<div class="profile-hero card"><div class="profile-badge">FM</div><div><div class="hero-kicker">PLAYER PROFILE</div><h2>${escapeHtml(player.name)}</h2><div class="muted">${escapeHtml(s.name)} · ${escapeHtml(s.title)} · Level ${player.level}</div></div></div>
+ <div class="section-title">CAREER</div><div class="dashboard-grid">
+ ${profileStat('Net Worth',money(totalNetWorth()))}
+ ${profileStat('Total Earned',money(player.stats.total_earned||0))}
+ ${profileStat('Biggest Score',money(player.stats.biggest_score||0))}
+ ${profileStat('Success Rate',`${winRate()}%`)}
+ ${profileStat('Successful Moves',player.stats.successful_moves||0)}
+ ${profileStat('Failed Moves',player.stats.failed_moves||0)}
+ ${profileStat('Arrests',player.stats.arrests||0)}
+ ${profileStat('Hospital Visits',player.stats.hospital_visits||0)}
+ ${profileStat('Days Survived',player.stats.days_survived||1)}
+ ${profileStat('Highest Heat',`${player.stats.highest_heat||0}★`)}
+ ${profileStat('Favorite Move',favoriteMove())}
+ ${profileStat('Achievements',`${player.achievements.length}/${Object.keys(ACHIEVEMENTS).length}`)}
+ </div>
+ <div class="section-title">CITY LIFE</div><div class="dashboard-grid">
+ ${profileStat('Protected Reserve',money(player.bank_cash||0))}
+ ${profileStat('Property Income',money(player.stats.total_property_income||0))}
+ ${profileStat('Lifetime Expenses',money(player.stats.total_expenses||0))}
+ ${profileStat('Random Events',player.stats.random_events||0)}
+ ${profileStat('Properties',player.properties.length)}
+ ${profileStat('Vehicles',player.vehicles.length)}
+ ${profileStat('Crew',player.crew.length)}
+ ${profileStat('Respect',player.respect)}
+ </div>`;
+}
+function profileStat(label,value){return `<div class="dash-card"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`}
+
 function renderHowTo(){return `${btn('← Start','start','','back')}<div class="card"><div class="section-title">HOW TO PLAY</div><div class="result-lines">
  <div class="result-line">Every action uses in-game time. Start at 8:00 AM and watch the 2:00 AM danger window.</div>
  <div class="result-line">Jobs now show 🟢 / 🟡 / 🔴 / ⚫ readiness based on your actual character and current heat.</div>
@@ -591,20 +735,24 @@ function renderHowTo(){return `${btn('← Start','start','','back')}<div class="
  <div class="result-line">Skills level naturally. Titles require a mix of level, respect and net worth.</div>
  <div class="result-line">Federal Motion is a long-term status, not an ending. Keep playing afterward.</div>
  <div class="result-line">Purchases include the in-game Motion Tax. Cloud saves and online stat syncing are active when CLOUD ONLINE appears.</div>
+ <div class="result-line">City Life: reserve cash protects money from carried-cash losses. Property can create income, while crew, vehicles, phones and property create daily upkeep.</div>
+ <div class="result-line">Unpaid bills carry forward. Random city events can help or hurt at the end of each day.</div>
  </div></div>`}
-function renderPatchNotes(){return `${btn('← Start','start','','back')}<div class="card"><div class="result-title">ALPHA 0.3 — BALANCE UPDATE</div><div class="result-lines"><div class="result-line">BALANCE: Early-game payouts reduced so progression takes longer.</div><div class="result-line">BALANCE: Repeating the same move in one day lowers payout and success odds.</div><div class="result-line">BALANCE: High heat now hits success odds much harder.</div><div class="result-line">BALANCE: Failed moves can lead to arrest, especially when heat is high.</div><div class="result-line">BALANCE: Jail and hospital consequences are more serious.</div><div class="result-line">NEW: Full HUD redesign with visual health, XP, respect and heat meters.</div><div class="result-line">NEW: Gritty street / trap-phone visual style across the game.</div><div class="result-line">NEW: Redesigned phone screens that visually improve with phone tier.</div><div class="result-line">NEW: Larger visual menu cards and cleaner navigation.</div><div class="result-line">NEW: Rebuilt job cards showing success %, payout, time, heat, weapon tier, crew and location.</div><div class="result-line">NEW: Improved alerts, status presentation and progression visibility.</div><div class="result-line">POLISH: Better spacing, mobile layout, panel styling and feedback states.</div></div></div>`}
+function renderPatchNotes(){return `${btn('← Start','start','','back')}<div class="card"><div class="result-title">ALPHA 0.4 — CITY LIFE UPDATE</div><div class="result-lines"><div class="result-line">FIX: Crew payout sharing is now capped so successful high-risk jobs remain worthwhile.</div><div class="result-line">NEW: Over-preparing now improves success odds through extra crew and stronger weapon tiers.</div><div class="result-line">NEW: Job cards show a full success-chance breakdown.</div><div class="result-line">NEW: Risk confirmation appears before dangerous moves and lists what can be lost.</div><div class="result-line">NEW: Very high-odds failures are labeled as rare failures instead of looking like a bug.</div><div class="result-line">NEW: Cash Reserve lets players protect money instead of carrying everything.</div><div class="result-line">NEW: Daily upkeep for vehicles, phones, crew and properties.</div><div class="result-line">NEW: Income-producing properties now pay into the protected reserve.</div><div class="result-line">NEW: Unpaid bills carry forward and can affect reputation.</div><div class="result-line">NEW: Random city events happen as days pass.</div><div class="result-line">NEW: Player Profile tracks career records, economy and city-life stats.</div><div class="result-line">BALANCE: Early-game payouts reduced so progression takes longer.</div><div class="result-line">BALANCE: Repeating the same move in one day lowers payout and success odds.</div><div class="result-line">BALANCE: High heat now hits success odds much harder.</div><div class="result-line">BALANCE: Failed moves can lead to arrest, especially when heat is high.</div><div class="result-line">BALANCE: Jail and hospital consequences are more serious.</div><div class="result-line">NEW: Full HUD redesign with visual health, XP, respect and heat meters.</div><div class="result-line">NEW: Gritty street / trap-phone visual style across the game.</div><div class="result-line">NEW: Redesigned phone screens that visually improve with phone tier.</div><div class="result-line">NEW: Larger visual menu cards and cleaner navigation.</div><div class="result-line">NEW: Rebuilt job cards showing success %, payout, time, heat, weapon tier, crew and location.</div><div class="result-line">NEW: Improved alerts, status presentation and progression visibility.</div><div class="result-line">POLISH: Better spacing, mobile layout, panel styling and feedback states.</div></div></div>`}
 
 
 function renderOwnerWallet(){
  if(!fmBackend.isOwner)return `${back()}<div class="card">Owner access required.</div>`;
- const b=fmBackend.ownerBank||{balance:0,total_tax_collected:0,total_tax_events:0,player_losses_collected:0,player_loss_events:0};
+ const b=fmBackend.ownerBank||{balance:0,total_tax_collected:0,total_tax_events:0,player_losses_collected:0,player_loss_events:0,upkeep_bills_collected:0,upkeep_bill_events:0};
  return `${back()}<div class="section-title private-title">PRIVATE OWNER WALLET</div>
  <div class="dashboard-grid">
   <div class="dash-card"><span>SPENDABLE BALANCE</span><strong>${money(b.balance||0)}</strong></div>
   <div class="dash-card"><span>LIFETIME MOTION TAX</span><strong>${money(b.total_tax_collected||0)}</strong></div>
   <div class="dash-card"><span>PLAYER LOSSES COLLECTED</span><strong>${money(b.player_losses_collected||0)}</strong></div>
+  <div class="dash-card"><span>UPKEEP & BILLS COLLECTED</span><strong>${money(b.upkeep_bills_collected||0)}</strong></div>
   <div class="dash-card"><span>TAX EVENTS</span><strong>${Number(b.total_tax_events||0).toLocaleString()}</strong></div>
   <div class="dash-card"><span>PLAYER LOSS EVENTS</span><strong>${Number(b.player_loss_events||0).toLocaleString()}</strong></div>
+  <div class="dash-card"><span>UPKEEP/BILL EVENTS</span><strong>${Number(b.upkeep_bill_events||0).toLocaleString()}</strong></div>
   <div class="dash-card"><span>PLAYER CASH</span><strong>${money(player.cash_on_person)}</strong></div>
   <div class="dash-card wide">
    <span>TRANSFER TO PLAYER CASH</span>
@@ -672,11 +820,72 @@ function currentMovePayout(id,m){
  const mult=Math.max(.5,1-repeats*.15);
  return [Math.max(1,Math.floor(m.cash[0]*mult)),Math.max(1,Math.floor(m.cash[1]*mult))];
 }
-function successChance(m,id=''){
- let c=m.base_success-heatPenalty()-repeatPenalty(id)-fatiguePenalty()+Math.min(10,player.level*1.5)+Math.min(6,Math.floor(player.respect/4))+skillLevel('street');
- if(m.combat){const e=(m.enemy[0]+m.enemy[1])/2;c+=Math.floor((combatPower()-e)*.5)}
- return clamp(Math.round(c),5,92)
+function prepBreakdown(m,id=''){
+ const reqCrew=m.requires_crew||0;
+ const extraCrew=Math.max(0,player.crew.length-reqCrew);
+ const crewBonus=Math.min(12,extraCrew*4);
+
+ const reqTier=m.weapon_tier||0;
+ const equippedTier=player.equipped_weapon?(WEAPONS[player.equipped_weapon]?.tier||0):0;
+ const gearBonus=reqTier>0?Math.min(8,Math.max(0,equippedTier-reqTier)*4):0;
+
+ const levelBonus=Math.min(10,Math.floor(player.level*1.5));
+ const respectBonus=Math.min(6,Math.floor(player.respect/4));
+ const streetBonus=skillLevel('street');
+ const heatLoss=heatPenalty();
+ const repeatLoss=repeatPenalty(id);
+ const fatigueLoss=fatiguePenalty();
+
+ let combatAdj=0;
+ if(m.combat){
+  const e=(m.enemy[0]+m.enemy[1])/2;
+  combatAdj=Math.floor((combatPower()-e)*.5);
+ }
+
+ return {
+  base:m.base_success,
+  crewBonus,
+  gearBonus,
+  levelBonus,
+  respectBonus,
+  streetBonus,
+  combatAdj,
+  heatLoss,
+  repeatLoss,
+  fatigueLoss
+ };
 }
+function successChance(m,id=''){
+ const b=prepBreakdown(m,id);
+ let c=b.base+b.crewBonus+b.gearBonus+b.levelBonus+b.respectBonus+b.streetBonus+b.combatAdj-b.heatLoss-b.repeatLoss-b.fatigueLoss;
+ return clamp(Math.round(c),5,95)
+}
+function oddsBreakdownHtml(m,id=''){
+ const b=prepBreakdown(m,id);
+ const rows=[
+  ['Base',b.base],
+  ...(b.crewBonus?[['Extra Crew',b.crewBonus]]:[]),
+  ...(b.gearBonus?[['Better Gear',b.gearBonus]]:[]),
+  ...(b.levelBonus?[['Level',b.levelBonus]]:[]),
+  ...(b.respectBonus?[['Respect',b.respectBonus]]:[]),
+  ...(b.streetBonus?[['Street Smarts',b.streetBonus]]:[]),
+  ...(b.combatAdj?[['Combat Prep',b.combatAdj]]:[]),
+  ...(b.heatLoss?[['Heat',-b.heatLoss]]:[]),
+  ...(b.repeatLoss?[['Repeat Pressure',-b.repeatLoss]]:[]),
+  ...(b.fatigueLoss?[['Fatigue',-b.fatigueLoss]]:[])
+ ];
+ return rows.map(([label,val])=>`<div class="odds-row"><span>${escapeHtml(label)}</span><strong class="${val<0?'bad':'good-text'}">${val>=0?'+':''}${val}%</strong></div>`).join('');
+}
+function riskItemsForMove(m){
+ const risks=[];
+ if(player.cash_on_person>0)risks.push(`Cash on person: ${money(player.cash_on_person)}`);
+ if(player.equipped_weapon)risks.push(`Weapon: ${WEAPONS[player.equipped_weapon]?.name||'Equipped weapon'}`);
+ if(player.equipped_armor)risks.push(`Armor: ${ARMOR[player.equipped_armor]?.name||'Equipped armor'}`);
+ if(m.combat)risks.push('Health / hospital');
+ if(m.heat>0)risks.push('Arrest / jail time');
+ return risks;
+}
+
 function requirement(m){if(player.level<(m.requires_level||1))return `Requires Level ${m.requires_level}`;if(m.requires_weapon&&!player.equipped_weapon)return 'Weapon required';if(m.weapon_tier&&currentWeaponTier()<m.weapon_tier)return `Requires Weapon Tier ${m.weapon_tier}+`;if(player.crew.length<(m.requires_crew||0))return `Requires ${m.requires_crew} crew member(s)`;return''}
 function result(title,lines){checkAchievements();saveGame();screen='result';payload={title,lines};render()}
 
@@ -694,6 +903,7 @@ function performMove(id){
 
  player.daily.job_counts[id]=repeatsBefore+1;
  player.daily.moves_attempted++;
+ player.stats.job_counts[id]=(player.stats.job_counts[id]||0)+1;
  player.stats.moves++;
  addSkillXP(m.combat?'combat':'street',m.combat?16:8);
  addSkillXP('endurance',5);
@@ -705,8 +915,13 @@ function performMove(id){
  }
 
  if(randInt(1,100)<=chance){
-  let gross=randInt(...payRange),cut=0;
-  player.crew.forEach(cid=>cut+=Math.floor(gross*CREW[cid].cut/100));
+  let gross=randInt(...payRange);
+  const rawCrewPct=player.crew.reduce((sum,cid)=>sum+(Number(CREW[cid]?.cut)||0),0);
+  // Extra crew helps the job, but total crew share is capped so over-prepping
+  // never makes a successful score feel worse than failing.
+  const crewPctCap=player.crew.length?40:0;
+  const effectiveCrewPct=Math.min(rawCrewPct,crewPctCap);
+  const cut=Math.floor(gross*effectiveCrewPct/100);
   let payout=Math.max(0,gross-cut);
 
   player.cash_on_person+=payout;
@@ -722,7 +937,7 @@ function performMove(id){
   player.daily.successes++;
 
   let lines=[`Cash: +${money(payout)}`,`XP: +${m.xp}`,`Respect: +${m.respect}`];
-  if(cut)lines.push(`Crew cuts paid: ${money(cut)}`);
+  if(cut)lines.push(`Crew cuts paid: ${money(cut)} (${effectiveCrewPct}% of score)`);
   if(heatGain)lines.push(`Heat: +${heatGain}★`);
   if(repeatsBefore>=1)lines.push('Repeated move pressure reduced the payout and odds.');
 
@@ -779,7 +994,7 @@ function performMove(id){
    if(randInt(1,100)<=bustChance){arrestEvent();return}
   }
 
-  result('MOVE FAILED',lines)
+  result(chance>=90?'RARE FAILURE — BAD BREAK':'MOVE FAILED',chance>=90?['You were heavily favored, but the small failure chance hit.',...lines]:lines)
  }
 }
 function hospitalRespawn(){const cash=player.cash_on_person;player.cash_on_person=0;if(cash>0)queueOwnerLoss(cash,'hospital_downed');player.carried_drugs=emptyDrugInventory();let lost=null;if(player.equipped_weapon){lost=weaponName();const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}const x=Math.min(player.xp,Math.max(75,Math.floor(player.xp*.15))),days=randInt(2,5);player.xp-=x;player.day+=days;player.time=DAY_START;player.location='hospital';player.health=65;player.stats.hospital_visits++;addSkillXP('endurance',25);resetDaily();result('YOU WENT DOWN',[`Cash lost from your person: ${money(cash)}`,'Carried inventory lost.',lost?`Weapon lost: ${lost}`:'No equipped weapon lost.',`XP lost: ${x}`,`Time passed: ${days} day(s)`,'Your trap stash and stored cash were untouched.'])}
@@ -787,7 +1002,132 @@ function arrestEvent(){const days=randInt(4,12),cash=Math.floor(player.cash_on_p
 function lateNightEvent(){const severity=Math.max(1,Math.floor((player.time-DAY_END)/30)+1),danger=Math.min(90,25+severity*10+player.heat*8);if(randInt(1,100)>danger){player.location='trap';forcedEndDay(['You got lucky and made it back.']);return}const o=['robbed','arrested','injured'][randInt(0,2)];if(o==='arrested'){arrestEvent();return}if(o==='robbed'){const c=player.cash_on_person;player.cash_on_person=0;if(c>0)queueOwnerLoss(c,'late_night_robbery');player.carried_drugs=emptyDrugInventory();player.location='trap';forcedEndDay([`Caught slipping after 2:00 AM.`,`Lost carried cash: ${money(c)}`,'Lost carried inventory.']);return}player.health-=randInt(25,55);if(player.health<=0){hospitalRespawn();return}player.location='trap';forcedEndDay([`You made it back hurt. Health: ${player.health}/100`])}
 function totalTrapValue(){let v=player.trap.cash;Object.entries(player.trap.drug_stash).forEach(([id,g])=>v+=Math.floor(g*DRUGS[id].base_value));player.trap.weapons.forEach(x=>v+=WEAPONS[x.id]?.price||0);return v}
 function overnightEventLines(){const s=player.trap.security,a=player.trap.attention,v=totalTrapValue();let risk=5+Math.floor(a/4)+player.heat*5+Math.min(20,Math.floor(v/1000))-s*6;risk=clamp(risk,3,70);if(randInt(1,100)>risk){player.trap.attention=Math.max(0,player.trap.attention-randInt(3,8));return['Quiet night. Nothing major happened.']}const e=['robbery','pressure','damage'][randInt(0,2)],lines=[];if(e==='robbery'){lines.push('Somebody hit the trap overnight.');const loss=Math.min(player.trap.cash,randInt(0,Math.max(50,Math.floor(player.trap.cash/3)+1)));player.trap.cash-=loss;if(loss){queueOwnerLoss(loss,'trap_robbery');lines.push(`Cash stolen: ${money(loss)}`);}player.trap.condition=Math.max(0,player.trap.condition-1)}else if(e==='pressure'){player.heat=clamp(player.heat+1,0,5);lines.push('Heavy pressure overnight.','Heat: +1★')}else{player.trap.condition=Math.max(0,player.trap.condition-1);lines.push('Something got damaged at the trap.','Trap Condition: -1')}player.trap.attention=Math.max(0,player.trap.attention-randInt(3,8));return lines}
-function endDay(){if(player.location!=='trap'){result('CAN’T SLEEP YET',['Return to your trap before sleeping.']);return}const cashNow=player.cash_on_person+player.trap.cash,summary=[`Cash Change: ${money(cashNow-player.daily.cash_start)}`,`XP Change: ${(player.xp-player.daily.xp_start>=0?'+':'')+(player.xp-player.daily.xp_start)}`,`Respect Change: ${(player.respect-player.daily.respect_start>=0?'+':'')+(player.respect-player.daily.respect_start)}`,`Heat Change: ${(player.heat-player.daily.heat_start>=0?'+':'')+(player.heat-player.daily.heat_start)}`,`Moves: ${player.daily.successes} successful / ${player.daily.failures} failed`,`Trap Attention: ${player.trap.attention}%`],night=overnightEventLines();player.day++;player.time=DAY_START;player.location='trap';player.stats.days_survived++;if(player.heat>0&&Math.random()<.35)player.heat--;generateMarket();resetDaily();result(`DAY ${player.day} — MORNING REPORT`,[...summary,'--- NIGHT REPORT ---',...night,`Heat: ${stars(player.heat)}`,'The city is moving again.'])}
+
+function takeAvailableCash(amount){
+ let need=Math.max(0,Math.floor(amount)),paid=0;
+ const pocket=Math.min(need,player.cash_on_person);player.cash_on_person-=pocket;need-=pocket;paid+=pocket;
+ const trap=Math.min(need,player.trap.cash);player.trap.cash-=trap;need-=trap;paid+=trap;
+ const reserve=Math.min(need,player.bank_cash||0);player.bank_cash-=reserve;need-=reserve;paid+=reserve;
+ return {paid,unpaid:need};
+}
+function collectPropertyIncome(){
+ let total=0,lines=[];
+ player.properties.forEach(id=>{
+  const e=PROPERTY_ECONOMY[id],p=PROPERTIES[id];
+  if(!e||!p||e.income[1]<=0)return;
+  let amount=randInt(e.income[0],e.income[1]);
+  if(player.trap.attention>=75)amount=Math.floor(amount*.65);
+  if(player.bills_due>500)amount=Math.floor(amount*.8);
+  total+=amount;
+  if(amount>0)lines.push(`${p.name}: +${money(amount)}`);
+ });
+ if(total>0){
+  player.bank_cash=(player.bank_cash||0)+total;
+  player.stats.total_property_income=(player.stats.total_property_income||0)+total;
+  player.stats.total_earned=(player.stats.total_earned||0)+total;
+ }
+ return {total,lines};
+}
+function chargeDailyExpenses(){
+ const amount=dailyExpenseEstimate();
+ if(amount<=0)return{amount:0,paid:0,unpaid:0};
+ const x=takeAvailableCash(amount);
+ player.stats.total_expenses=(player.stats.total_expenses||0)+x.paid;
+ if(x.paid>0)queueOwnerUpkeep(x.paid,'daily_upkeep');
+ if(x.unpaid>0)player.bills_due=(player.bills_due||0)+x.unpaid;
+ return {amount,paid:x.paid,unpaid:x.unpaid};
+}
+function cityLifeRandomEvent(){
+ const roll=randInt(1,100);
+ player.stats.random_events=(player.stats.random_events||0)+1;
+ if(roll<=18){
+  const a=randInt(25,90);
+  player.bank_cash=(player.bank_cash||0)+a;
+  player.stats.total_earned+=a;
+  return [`CITY EVENT: A small legitimate side opportunity paid ${money(a)}.`,`Reserve: +${money(a)}`];
+ }
+ if(roll<=33 && player.vehicles.length>1){
+  const a=randInt(20,85);
+  const x=takeAvailableCash(a);
+  player.stats.total_expenses+=x.paid;
+  if(x.unpaid)player.bills_due+=x.unpaid;
+  return [`CITY EVENT: Vehicle maintenance came due.`,`Cost: ${money(a)}${x.unpaid?` · ${money(x.unpaid)} added to bills`:''}`];
+ }
+ if(roll<=48 && player.properties.length>1){
+  const a=randInt(25,110);
+  const x=takeAvailableCash(a);
+  player.stats.total_expenses+=x.paid;
+  if(x.unpaid)player.bills_due+=x.unpaid;
+  return [`CITY EVENT: Property maintenance hit unexpectedly.`,`Cost: ${money(a)}${x.unpaid?` · ${money(x.unpaid)} added to bills`:''}`];
+ }
+ if(roll<=62 && player.crew.length){
+  player.respect+=1;
+  return ['CITY EVENT: Crew morale is high after a quiet night.','Respect: +1'];
+ }
+ if(roll<=78){
+  const cool=randInt(4,10);
+  player.trap.attention=Math.max(0,player.trap.attention-cool);
+  return [`CITY EVENT: The neighborhood stayed quiet.`,`Trap attention: -${cool}%`];
+ }
+ if(roll<=90){
+  const pressure=randInt(5,12);
+  player.trap.attention=clamp(player.trap.attention+pressure,0,100);
+  return [`CITY EVENT: Extra attention around your property.`,`Trap attention: +${pressure}%`];
+ }
+ const a=randInt(40,140);
+ player.bank_cash=(player.bank_cash||0)+a;
+ player.stats.total_earned+=a;
+ return [`CITY EVENT: Unexpected money came through from a property connection.`,`Reserve: +${money(a)}`];
+}
+
+function endDay(){
+ if(player.location!=='trap'){result('CAN’T SLEEP YET',['Return to your trap before sleeping.']);return}
+ const cashNow=player.cash_on_person+player.trap.cash+(player.bank_cash||0);
+ const summary=[
+  `Cash Change Before Bills: ${money(cashNow-player.daily.cash_start)}`,
+  `XP Change: ${(player.xp-player.daily.xp_start>=0?'+':'')+(player.xp-player.daily.xp_start)}`,
+  `Respect Change: ${(player.respect-player.daily.respect_start>=0?'+':'')+(player.respect-player.daily.respect_start)}`,
+  `Heat Change: ${(player.heat-player.daily.heat_start>=0?'+':'')+(player.heat-player.daily.heat_start)}`,
+  `Moves: ${player.daily.successes} successful / ${player.daily.failures} failed`,
+  `Trap Attention: ${player.trap.attention}%`
+ ];
+ const night=overnightEventLines();
+ const income=collectPropertyIncome();
+ const expenses=chargeDailyExpenses();
+ const event=cityLifeRandomEvent();
+
+ player.day++;
+ player.time=DAY_START;
+ player.location='trap';
+ player.stats.days_survived++;
+ if(player.heat>0&&Math.random()<.35)player.heat--;
+ if(player.bills_due>=500&&player.day%3===0){
+  player.respect=Math.max(0,player.respect-1);
+  event.push('UNPAID BILLS: Your reputation took a small hit. Respect: -1');
+ }
+ generateMarket();
+ resetDaily();
+
+ const economy=[
+  `Property Income: +${money(income.total)}`,
+  ...income.lines,
+  `Daily Upkeep: -${money(expenses.paid)}`,
+  ...(expenses.unpaid?[`Unpaid Today: ${money(expenses.unpaid)}`,`Total Bills Due: ${money(player.bills_due)}`]:[]),
+  `Protected Reserve: ${money(player.bank_cash||0)}`
+ ];
+ result(`DAY ${player.day} — CITY LIFE REPORT`,[
+  ...summary,
+  '--- PROPERTY & BILLS ---',
+  ...economy,
+  '--- NIGHT REPORT ---',
+  ...night,
+  '--- CITY EVENT ---',
+  ...event,
+  `Heat: ${stars(player.heat)}`,
+  'The city is moving again.'
+ ])
+}
+
 function forcedEndDay(extra){const night=overnightEventLines();player.day++;player.time=DAY_START;player.location='trap';player.stats.days_survived++;if(player.heat>0&&Math.random()<.35)player.heat--;generateMarket();resetDaily();result(`DAY ${player.day} — MORNING REPORT`,[...extra,'--- NIGHT REPORT ---',...night,`Heat: ${stars(player.heat)}`])}
 
 async function loadLeaderboard(){
@@ -806,7 +1146,7 @@ function handle(action){
  if(action==='deleteSave'){if(confirm('Delete your Federal Motion local save?')){localStorage.removeItem(SAVE_KEY);localStorage.removeItem(LEGACY_SAVE_KEY);player=null;screen='start';render()}return}
  if(action==='start'){screen='start';render();return}
  if(action==='home'){screen='home';payload=null;render();return}
- const direct=['moves','street','supplier','black','weapons','armor','equip','crew','map','stash','upgrades','hospital','status','market','phone','objectives','achievements','skills','laylow','vehicles','properties','howto','patch','leaderboard','ownerWallet','ownerDashboard'];
+ const direct=['moves','street','supplier','black','weapons','armor','equip','crew','map','stash','bank','profile','upgrades','hospital','status','market','phone','objectives','achievements','skills','laylow','vehicles','properties','howto','patch','leaderboard','ownerWallet','ownerDashboard'];
  if(direct.includes(action)){screen=action;payload=null;render();if(action==='leaderboard')setTimeout(loadLeaderboard,0);if(action==='ownerDashboard')setTimeout(loadOwnerDashboard,0);return}
  if(action==='phoneShop'){screen='phoneShop';payload=null;app().innerHTML=header()+renderPhoneShop()+`<div class="footer-note">Local + cloud save active.</div>`;return}
  if(action==='phoneMessages'){app().innerHTML=header()+renderMessages()+`<div class="footer-note">Local + cloud save active.</div>`;return}
@@ -846,7 +1186,20 @@ function handle(action){
   return;
  }
  if(action==='sleep'){endDay();return}
- if(action.startsWith('doMove:')){performMove(action.split(':')[1]);return}
+ if(action.startsWith('doMove:')){
+  const id=action.split(':')[1],m=MOVES[id],r=m?requirement(m):'Move unavailable';
+  if(r){result('LOCKED',[r]);return}
+  payload={moveId:id};
+  screen='moveConfirm';
+  render();
+  return
+ }
+ if(action.startsWith('confirmMove:')){
+  const id=action.split(':')[1];
+  payload=null;
+  performMove(id);
+  return
+ }
  if(action.startsWith('supplier:')){const n=action.split(':')[1];if((n==='Doc'&&player.respect<3)||(n==='Ghost'&&player.respect<8)){result('NOT YET',[n==='Doc'?'Doc: Come back when people know your name.':'Ghost isn’t interested yet.']);return}travelTo('supplier');if(screen==='result')return;screen='supplierShop';payload=n;render();return}
  if(action==='buyDrugGo'){const id=$('#buyDrug').value,g=parseFloat($('#buyGrams').value||0),p=supplierUnitPrice(id),cost=Math.floor(g*p),name=payload;if(g<=0)return;const charge=taxedPurchase(cost);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)} including ${money(charge.tax)} Motion Tax.`]);return}player.carried_drugs[id]+=g;player.supplier_trust[name]++;addSkillXP('charisma',4);advanceTime(30);if(screen==='result')return;result('DEAL COMPLETE',[`${DRUGS[id].name}: +${g.toFixed(1)}g`,`Base: -${money(charge.base)}`,`Motion Tax: -${money(charge.tax)}`,`Total: -${money(charge.total)}`]);return}
  if(action==='streetGo'){const id=$('#streetDrug').value,g=Math.min(parseFloat($('#streetGrams').value||0),player.carried_drugs[id]);if(g<=0)return;const d=DRUGS[id],pay=Math.floor(g*d.base_value*player.market[id]*(.68+Math.random()*.20)),chance=Math.max(28,92-d.risk*4-heatPenalty()+skillLevel('street'));advanceTime(randInt(35,65));if(screen==='result')return;player.stats.moves++;addSkillXP('street',12);if(randInt(1,100)<=chance){player.carried_drugs[id]-=g;player.cash_on_person+=pay;player.stats.total_earned+=pay;const xp=Math.max(10,Math.floor(g*2));player.xp+=xp;if(randInt(1,100)<=d.risk*8)player.heat=clamp(player.heat+1,0,5);player.stats.successful_moves++;player.daily.successes++;const lvl=updateLevel();result('MOVE SUCCESSFUL',[`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(lvl?[lvl]:[])])}else{player.stats.failed_moves++;player.daily.failures++;player.heat=clamp(player.heat+1,0,5);result('MOVE WENT BAD',['The opportunity fell apart.','No inventory was lost.','Heat: +1★'])}return}
@@ -859,6 +1212,32 @@ function handle(action){
  if(action.startsWith('activeVehicle:')){const id=action.split(':')[1];if(player.vehicles.includes(id)){player.active_vehicle=id;saveGame();screen='vehicles';render()}return}
  if(action.startsWith('buyVehicle:')){const id=action.split(':')[1],v=VEHICLES[id],c=taxedPurchase(v.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.vehicles.push(id);player.active_vehicle=id;result('VEHICLE PURCHASED',[`${v.name} added to your garage.`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action.startsWith('buyProperty:')){const id=action.split(':')[1],p=PROPERTIES[id],c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.properties.push(id);result('PROPERTY PURCHASED',[`${p.name} is now yours.`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
+ if(action==='bankDeposit'||action==='bankWithdraw'){
+  if(player.location!=='trap'){result('CASH RESERVE',['Return to your trap to move reserve cash.']);return}
+  let a=Math.max(0,Math.floor(Number($('#bankAmount')?.value||0)));
+  if(a<=0)return;
+  if(action==='bankDeposit'){
+   a=Math.min(a,player.cash_on_person);
+   player.cash_on_person-=a;
+   player.bank_cash=(player.bank_cash||0)+a;
+   player.stats.total_banked=(player.stats.total_banked||0)+a;
+  }else{
+   a=Math.min(a,player.bank_cash||0);
+   player.bank_cash-=a;
+   player.cash_on_person+=a;
+  }
+  saveGame();screen='bank';render();return
+ }
+ if(action==='payBills'){
+  const due=Math.max(0,Math.floor(player.bills_due||0));
+  if(!due){screen='bank';render();return}
+  const x=takeAvailableCash(due);
+  player.bills_due=x.unpaid;
+  player.stats.total_expenses=(player.stats.total_expenses||0)+x.paid;
+  if(x.paid>0)queueOwnerUpkeep(x.paid,'overdue_bills');
+  result('BILLS PAYMENT',[`Paid: ${money(x.paid)}`,`Remaining Due: ${money(x.unpaid)}`]);
+  return
+ }
  if(action==='depositCash'||action==='withdrawCash'){let a=Math.max(0,Math.floor(Number($('#cashAmount').value||0)));if(action==='depositCash'){a=Math.min(a,player.cash_on_person);player.cash_on_person-=a;player.trap.cash+=a}else{a=Math.min(a,player.trap.cash);player.trap.cash-=a;player.cash_on_person+=a}saveGame();screen='stash';render();return}
  if(action==='storeDrug'||action==='takeDrug'){const id=$('#stashDrug').value;let g=Math.max(0,Number($('#stashGrams').value||0)),src=action==='storeDrug'?player.carried_drugs:player.trap.drug_stash,dst=action==='storeDrug'?player.trap.drug_stash:player.carried_drugs;g=Math.min(g,src[id]);src[id]-=g;dst[id]+=g;saveGame();screen='stash';render();return}
  if(action==='storeWeapons'){player.trap.weapons.push(...player.weapon_inventory);player.weapon_inventory=[];player.equipped_weapon=null;saveGame();screen='stash';render();return}

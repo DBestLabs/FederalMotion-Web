@@ -210,3 +210,48 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.12;ba
 .hud-strip .hud-quick small{
   display:none !important;
 }
+
+
+/* Alpha 0.4 City Life */
+.profile-hero{display:flex;align-items:center;gap:14px}
+.profile-badge{
+  width:62px;height:62px;min-width:62px;border-radius:16px;
+  display:grid;place-items:center;font-weight:900;font-size:20px;
+  border:1px solid rgba(255,255,255,.14);
+  background:linear-gradient(145deg,rgba(255,255,255,.09),rgba(255,255,255,.025));
+}
+.profile-hero h2{margin:3px 0 2px;font-size:24px}
+#bankAmount{width:100%}
+
+
+/* Alpha 0.4 prep + risk clarity */
+.odds-details{margin-top:10px}
+.odds-details summary{
+  cursor:pointer;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.72
+}
+.odds-box{
+  margin-top:9px;padding:10px;border:1px solid rgba(255,255,255,.08);
+  border-radius:12px;background:rgba(255,255,255,.025)
+}
+.odds-row,.odds-final{
+  display:flex;justify-content:space-between;gap:12px;padding:5px 0;
+  border-bottom:1px dashed rgba(255,255,255,.07)
+}
+.odds-final{margin-top:5px;padding-top:9px;border-bottom:0;font-size:15px}
+.good-text{opacity:.9}
+.odds-row .bad{opacity:.9}
+.risk-confirm h2{margin:5px 0 8px}
+.risk-kicker{
+  font-size:10px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;
+  opacity:.85
+}
+.risk-copy{opacity:.78;line-height:1.45;margin-bottom:12px}
+.risk-list{
+  padding:10px;border-radius:12px;background:rgba(255,255,255,.025);
+  border:1px solid rgba(255,255,255,.08);display:grid;gap:6px;font-size:12px
+}
+.risk-actions{margin-top:14px}
+.notice.good{
+  border-color:rgba(120,255,120,.25);
+  background:rgba(120,255,120,.05)
+}
