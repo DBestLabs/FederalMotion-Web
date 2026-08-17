@@ -307,3 +307,92 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.12;ba
 .employment-copy strong{font-size:15px}
 .employment-copy p{margin:6px 0 0;color:#8c8c8c;font-size:11px;line-height:1.45}
 .corporate-card{background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018));border-color:#343a36}
+
+
+/* FINAL HUD SLOT FIX — WEAPON/RIDE match CASH/LOCATION and remain tappable */
+.hud-strip{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+  margin-top:10px;
+}
+
+.hud-strip > div,
+.hud-strip > .hud-quick{
+  display:flex !important;
+  align-items:center !important;
+  justify-content:space-between !important;
+  gap:10px !important;
+  min-width:0 !important;
+  width:100% !important;
+  margin:0 !important;
+  padding:8px 9px !important;
+  border:1px solid #252a27 !important;
+  border-radius:9px !important;
+  background:#0b0c0c !important;
+  color:inherit !important;
+  font:inherit !important;
+  font-size:11px !important;
+  text-align:left !important;
+  box-shadow:none !important;
+  box-sizing:border-box !important;
+}
+
+.hud-strip > .hud-quick{
+  appearance:none !important;
+  -webkit-appearance:none !important;
+  cursor:pointer !important;
+}
+
+.hud-strip > div > span,
+.hud-strip > .hud-quick > span{
+  display:flex !important;
+  align-items:center !important;
+  gap:5px !important;
+  flex:0 0 auto !important;
+  white-space:nowrap !important;
+  color:#858585 !important;
+}
+
+.hud-strip > div > strong,
+.hud-strip > .hud-quick > strong{
+  display:block !important;
+  flex:1 1 auto !important;
+  min-width:0 !important;
+  text-align:right !important;
+  white-space:nowrap !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
+}
+
+.hud-strip > .hud-quick:hover,
+.hud-strip > .hud-quick:focus{
+  border-color:#33513b !important;
+  outline:none !important;
+}
+
+.hud-strip > .hud-quick:active{
+  transform:scale(.98) !important;
+}
+
+.hud-strip > .hud-quick small{
+  display:none !important;
+}
+
+@media(max-width:560px){
+  .hud-strip > div > span,
+  .hud-strip > .hud-quick > span{
+    font-size:10px !important;
+  }
+
+  .hud-strip > div > strong,
+  .hud-strip > .hud-quick > strong{
+    font-size:11px !important;
+  }
+}
+
+@media(min-width:700px){
+  .hud-strip{
+    grid-template-columns:repeat(4,minmax(0,1fr));
+  }
+}
