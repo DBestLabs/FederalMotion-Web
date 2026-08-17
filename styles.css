@@ -299,108 +299,11 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.12;ba
  .territory-grid{grid-template-columns:1fr}
  .territory-top{align-items:flex-start}
 }
-/* HUD BOX MATCH FIX */
-.hud-strip{
-  display:grid;
-  grid-template-columns:repeat(2,minmax(0,1fr));
-  gap:8px;
-  margin-top:10px;
-}
 
-.hud-strip > div,
-.hud-strip > .hud-quick{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:8px;
-  min-width:0;
-  padding:8px 9px;
-  border:1px solid #252a27;
-  border-radius:9px;
-  background:#0b0c0c;
-  font-size:11px;
-}
-
-.hud-strip > .hud-quick{
-  appearance:none;
-  -webkit-appearance:none;
-  width:100%;
-  margin:0;
-  color:inherit;
-  font:inherit;
-  text-align:left;
-  cursor:pointer;
-}
-
-.hud-strip span{
-  color:#858585;
-}
-
-.hud-strip strong{
-  text-align:right;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-
-.hud-strip > .hud-quick:hover,
-.hud-strip > .hud-quick:focus{
-  border-color:#33513b;
-  outline:none;
-}
-
-.hud-strip > .hud-quick:active{
-  transform:scale(.98);
-}
-
-.hud-strip > .hud-quick small{
-  display:none !important;
-}
-
-@media(min-width:700px){
-  .hud-strip{
-    grid-template-columns:repeat(4,minmax(0,1fr));
-  }
-}/* HUD LABEL + VALUE ALIGNMENT FIX */
-.hud-strip > div,
-.hud-strip > .hud-quick{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:10px;
-}
-
-.hud-strip > div > span,
-.hud-strip > .hud-quick > span{
-  display:flex;
-  align-items:center;
-  gap:5px;
-  flex:0 0 auto;
-  white-space:nowrap;
-}
-
-.hud-strip > div > strong,
-.hud-strip > .hud-quick > strong{
-  flex:1 1 auto;
-  min-width:0;
-  text-align:right;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-}
-
-.hud-strip > .hud-quick{
-  padding:8px 9px;
-}
-
-@media(max-width:560px){
-  .hud-strip > div > span,
-  .hud-strip > .hud-quick > span{
-    font-size:10px;
-  }
-
-  .hud-strip > div > strong,
-  .hud-strip > .hud-quick > strong{
-    font-size:11px;
-  }
-}
+/* Alpha 0.5 Employment */
+.employment-list{display:grid;gap:12px}
+.employment-card{border:1px solid #303632;border-radius:15px;background:linear-gradient(180deg,#151817,#0e100f);overflow:hidden}
+.employment-copy{padding:12px 13px}
+.employment-copy strong{font-size:15px}
+.employment-copy p{margin:6px 0 0;color:#8c8c8c;font-size:11px;line-height:1.45}
+.corporate-card{background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.018));border-color:#343a36}

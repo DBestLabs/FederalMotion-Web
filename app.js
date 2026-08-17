@@ -102,6 +102,17 @@ const LOCATIONS={
 };
 
 
+
+const LEGIT_JOBS={
+ fedup:{company:'FedUp Logistics',title:'Package Handler',start:480,duration:540,base_pay:46,description:'Move boxes nobody needed overnight. Management calls it a career.',skill:'endurance',promotions:[{shifts:0,title:'Package Handler',pay:46},{shifts:20,title:'Senior Package Handler',pay:50,bonus:100},{shifts:40,title:'Lead Package Handler',pay:56,bonus:140},{shifts:60,title:'Team Lead',pay:64,bonus:200},{shifts:100,title:'Shift Supervisor',pay:78,bonus:350}]},
+ probably_legal:{company:'Probably Legal Construction LLC',title:'Laborer',start:420,duration:540,base_pay:48,description:'Carry expensive stuff while somebody making four times your wage points at it.',skill:'endurance',promotions:[{shifts:0,title:'Laborer',pay:48},{shifts:20,title:'Experienced Laborer',pay:52,bonus:100},{shifts:40,title:'Crew Lead',pay:58,bonus:150},{shifts:60,title:'Site Lead',pay:66,bonus:220},{shifts:100,title:'Foreman',pay:80,bonus:375}]},
+ deliver_eventually:{company:'WeDeliverEventually',title:'Delivery Driver',start:540,duration:480,base_pay:45,description:'Deliver somebody else’s impulse purchase and pray the address actually exists.',skill:'driving',requires_vehicle:true,promotions:[{shifts:0,title:'Delivery Driver',pay:45},{shifts:20,title:'Route Driver',pay:49,bonus:90},{shifts:40,title:'Senior Driver',pay:55,bonus:130},{shifts:60,title:'Route Captain',pay:63,bonus:190},{shifts:100,title:'Dispatch Lead',pay:76,bonus:320}]},
+ stand_around:{company:'Stand Around Security',title:'Security Guard',start:960,duration:480,base_pay:44,description:'Protect property you could never afford.',skill:'street',promotions:[{shifts:0,title:'Security Guard',pay:44},{shifts:20,title:'Senior Guard',pay:48,bonus:90},{shifts:40,title:'Shift Guard',pay:54,bonus:130},{shifts:60,title:'Site Supervisor',pay:62,bonus:190},{shifts:100,title:'Regional Supervisor',pay:74,bonus:300}]},
+ auto_correct:{company:'Auto Correct Garage',title:'Shop Assistant',start:480,duration:540,base_pay:47,description:'Fix other people’s rides while your own check-engine light stays on.',skill:'driving',promotions:[{shifts:0,title:'Shop Assistant',pay:47},{shifts:20,title:'Service Helper',pay:51,bonus:100},{shifts:40,title:'Junior Tech',pay:57,bonus:150},{shifts:60,title:'Service Tech',pay:65,bonus:220},{shifts:100,title:'Shop Lead',pay:79,bonus:360}]},
+ dial_deny:{company:'Dial & Deny Wireless',title:'Sales Associate',start:600,duration:480,base_pay:43,description:'Explain activation fees with a straight face.',skill:'charisma',promotions:[{shifts:0,title:'Sales Associate',pay:43},{shifts:20,title:'Senior Associate',pay:47,bonus:85},{shifts:40,title:'Keyholder',pay:53,bonus:125},{shifts:60,title:'Assistant Manager',pay:61,bonus:185},{shifts:100,title:'Store Manager',pay:75,bonus:300}]},
+ tip_optional:{company:'Tip Optional Pizza',title:'Kitchen Crew',start:840,duration:480,base_pay:41,description:'Make dinner for people who will complain about a $2 delivery fee.',skill:'endurance',promotions:[{shifts:0,title:'Kitchen Crew',pay:41},{shifts:20,title:'Senior Crew',pay:45,bonus:80},{shifts:40,title:'Shift Lead',pay:51,bonus:120},{shifts:60,title:'Assistant Manager',pay:59,bonus:180},{shifts:100,title:'General Manager',pay:72,bonus:290}]}
+};
+
 const TERRITORY_ZONES={
  southside:{name:'Southside',district:'Southside',gang:'Redline Crew',difficulty:32,signature_drug:'weed',weapon_pool:['street_pistol','fn_style'],bonus:'Street income +5%',bonus_value:5},
  midtown:{name:'Midtown Strip',district:'Midtown',gang:'Midtown Kings',difficulty:42,signature_drug:'pills',weapon_pool:['fn_style','pump_shotgun'],bonus:'Shop prices -5%',bonus_value:5},
@@ -162,14 +173,14 @@ function meter(label,value,max,cls=''){const pct=clamp((Number(value)||0)/Math.m
 function emptyDrugInventory(){return Object.fromEntries(Object.keys(DRUGS).map(k=>[k,0]))}
 function newPlayer(name='Player'){
  return {
-  name,day:1,time:DAY_START,level:1,xp:0,respect:0,heat:0,health:100,cash_on_person:0,bank_cash:0,bills_due:0,location:'trap',
+  name,day:1,time:DAY_START,level:1,xp:0,respect:0,heat:0,health:100,cash_on_person:0,bank_cash:0,bills_due:0,work_rep:0,location:'trap',
   phone_id:'burner',equipped_weapon:null,equipped_armor:null,weapon_inventory:[],armor_inventory:[],crew:[],
   carried_drugs:emptyDrugInventory(),vehicles:['bicycle'],active_vehicle:'bicycle',properties:['starter_trap'],
   trap:{cash:0,drug_stash:emptyDrugInventory(),weapons:[],armor:[],security:0,storage:1,condition:1,attention:0},
   market:Object.fromEntries(Object.keys(DRUGS).map(k=>[k,1])),supplier_trust:{Smoke:0,Doc:0,Ghost:0},
   skills:{combat:{xp:0,level:1},street:{xp:0,level:1},charisma:{xp:0,level:1},driving:{xp:0,level:1},business:{xp:0,level:1},endurance:{xp:0,level:1}},
   achievements:[],messages:[{from:'Unknown',text:'Everybody starts somewhere. Get some motion.'}],
-  stats:{moves:0,successful_moves:0,failed_moves:0,hospital_visits:0,arrests:0,days_survived:1,biggest_score:0,highest_heat:0,total_earned:0,total_expenses:0,total_property_income:0,random_events:0,total_banked:0,job_counts:{}},
+  stats:{moves:0,successful_moves:0,failed_moves:0,hospital_visits:0,arrests:0,days_survived:1,biggest_score:0,highest_heat:0,total_earned:0,total_expenses:0,total_property_income:0,random_events:0,total_banked:0,job_counts:{},legit_shifts:0,legit_pay_earned:0},
   daily:{}
  };
 }
@@ -191,6 +202,13 @@ function migratePlayer(p){
  if(!Array.isArray(p.messages))p.messages=d.messages;
  if(!Number.isFinite(p.bank_cash))p.bank_cash=0;
  if(!Number.isFinite(p.bills_due))p.bills_due=0;
+ if(!Number.isFinite(p.work_rep))p.work_rep=0;
+ if(!p.employment||typeof p.employment!=='object')p.employment={};
+ const empD={current_job:null,shifts_worked:0,pending_pay:0,week_shifts:0,writeups:0,missed_shifts:0,last_shift_day:0,last_payday_day:0,employment_history:[]};
+ Object.entries(empD).forEach(([k,v])=>{if(p.employment[k]===undefined)p.employment[k]=v});
+ if(!Array.isArray(p.employment.employment_history))p.employment.employment_history=[];
+ if(!Number.isFinite(p.stats.legit_shifts))p.stats.legit_shifts=0;
+ if(!Number.isFinite(p.stats.legit_pay_earned))p.stats.legit_pay_earned=0;
  if(!p.stats.job_counts||typeof p.stats.job_counts!=='object')p.stats.job_counts={};
  for(const k of ['total_expenses','total_property_income','random_events','total_banked'])if(!Number.isFinite(p.stats[k]))p.stats[k]=0;
  if(!p.daily||typeof p.daily!=='object')p.daily={};
@@ -499,7 +517,7 @@ function render(){
   black:renderBlack,weapons:renderWeapons,armor:renderArmor,equip:renderEquip,crew:renderCrew,map:renderMap,stash:renderStash,
   upgrades:renderUpgrades,hospital:renderHospital,status:renderStatus,market:renderMarket,phone:renderPhone,objectives:renderObjectives,
   achievements:renderAchievements,skills:renderSkills,laylow:renderLayLow,vehicles:renderVehicles,properties:renderProperties,
-  howto:renderHowTo,patch:renderPatchNotes,leaderboard:renderLeaderboard,bank:renderBank,profile:renderProfile,moveConfirm:renderMoveConfirm,playerCrew:renderPlayerCrew,territories:renderTerritories,territoryDetail:renderTerritoryDetail,ownerWallet:renderOwnerWallet,ownerDashboard:renderOwnerDashboard
+  howto:renderHowTo,patch:renderPatchNotes,leaderboard:renderLeaderboard,bank:renderBank,employment:renderEmployment,profile:renderProfile,moveConfirm:renderMoveConfirm,playerCrew:renderPlayerCrew,territories:renderTerritories,territoryDetail:renderTerritoryDetail,ownerWallet:renderOwnerWallet,ownerDashboard:renderOwnerDashboard
  };
  if(screen==='supplierShop')html+=renderSupplierShop(payload);else html+=(map[screen]||renderHome)();
  app().innerHTML=html+`<div class="footer-note">${fmBackend.ready?'Local save + cloud sync active.':'Local save active. Cloud will sync when connected.'}</div>`;
@@ -605,6 +623,7 @@ function renderHome(){
  ${menuCard(icon('property'),'Properties','Own multiple locations','properties','property')}
  ${menuCard(icon('stash'),'Trap Stash','Cash, inventory & weapons','stash','stash')}
  ${menuCard(icon('bank'),'Cash Reserve',`Protected cash ${money(player.bank_cash||0)}`,'bank','stash')}
+ ${menuCard('💼','Employment',workJob()?`${workJob().company} · ${currentWorkTier()?.title||workJob().title}`:'Get a legit job','employment','status')}
  ${menuCard(icon('profile'),'Player Profile','Career stats & records','profile','status')}
  ${menuCard(icon('upgrade'),'Trap Upgrades','Security, storage, condition','upgrades','upgrade')}
  ${menuCard(icon('laylow'),'Lay Low','Reduce heat with time','laylow','laylow')}
@@ -739,6 +758,26 @@ function territoryBonusPercent(type){
  });
  return n;
 }
+
+function workJob(){return player?.employment?.current_job?LEGIT_JOBS[player.employment.current_job]||null:null}
+function currentWorkTier(job=workJob()){if(!job)return null;let t=job.promotions[0];for(const x of job.promotions)if((player.employment.shifts_worked||0)>=x.shifts)t=x;return t}
+function nextWorkTier(job=workJob()){return job?job.promotions.find(x=>x.shifts>(player.employment.shifts_worked||0))||null:null}
+function workShiftPay(job=workJob()){return currentWorkTier(job)?.pay||job?.base_pay||0}
+function canClockIn(){
+ const j=workJob();if(!j)return{ok:false,msg:'You do not have a job.'};
+ if(player.equipped_weapon)return{ok:false,msg:'Management noticed the weapon. Unequip it before reporting to work.'};
+ if(j.requires_vehicle&&!player.active_vehicle)return{ok:false,msg:'This job requires an active vehicle.'};
+ if(player.employment.last_shift_day===player.day)return{ok:false,msg:'You already worked today.'};
+ if(player.time<j.start-60)return{ok:false,msg:`Your shift does not start until ${formatTime(j.start)}.`};
+ if(player.time>j.start+60)return{ok:false,msg:'You missed the clock-in window for this shift.'};
+ return{ok:true};
+}
+function workEvent(){const a=['Your manager noticed you actually showed up prepared.','A coworker called out. Of course they did.','Something broke and everybody stared at it.','A customer asked for the manager.','Nothing caught fire. Great shift.','Management discovered you own free time.'];return a[randInt(0,a.length-1)]}
+function applyWorkMilestone(job,oldN,newN){const lines=[];for(const t of job.promotions)if(t.shifts>oldN&&t.shifts<=newN){if(t.bonus){player.employment.pending_pay+=t.bonus;lines.push(`Seniority bonus: +${money(t.bonus)} pending pay`)}if(t.shifts>0)lines.push(`Promotion: ${t.title} · ${money(t.pay)}/shift`)}return lines}
+function paydayIfDue(){const e=player.employment;if(!e||e.pending_pay<=0)return[];if(!(player.day%7===6||player.day-e.last_payday_day>=7))return[];const a=Math.floor(e.pending_pay);player.bank_cash=(player.bank_cash||0)+a;player.stats.total_earned+=a;player.stats.legit_pay_earned=(player.stats.legit_pay_earned||0)+a;e.pending_pay=0;e.week_shifts=0;e.last_payday_day=player.day;player.messages.unshift({from:'Payroll',text:`Payday deposit: ${money(a)}.`,day:player.day});return[`PAYDAY: ${money(a)} deposited to Cash Reserve.`]}
+function processMissedWorkDay(){const j=workJob();if(!j||player.employment.last_shift_day===player.day||player.time<j.start+j.duration)return[];player.employment.missed_shifts++;player.employment.writeups++;player.work_rep=Math.max(0,(player.work_rep||0)-2);const lines=[`MISSED SHIFT: ${j.company}`,`Write-ups: ${player.employment.writeups}/3`];if(player.employment.writeups>=3){player.employment.employment_history.unshift({company:j.company,title:currentWorkTier(j)?.title||j.title,shifts:player.employment.shifts_worked||0,status:'Fired'});player.messages.unshift({from:`${j.company} HR`,text:'After careful consideration, we have decided to promote you to customer.',day:player.day});player.employment.current_job=null;player.employment.writeups=0;player.employment.shifts_worked=0;lines.push('FIRED: Promoted to customer.')}return lines}
+function streetTemptationMessage(){if(!workJob()||Math.random()>.35)return null;const a=['You really finna work 9 hours for that check? I got something faster.','That whole week check could be one good night. Hit me back.','HR got you working hard. The city pays different after dark.'];const t=a[randInt(0,a.length-1)];player.messages.unshift({from:'Unknown Number',text:t,day:player.day});return t}
+
 function dailyExpenseEstimate(){
  let n=0;
  player.properties.forEach(id=>n+=(PROPERTY_ECONOMY[id]?.upkeep||0));
@@ -752,6 +791,17 @@ function propertyIncomeEstimate(){
  player.properties.forEach(id=>{const a=PROPERTY_ECONOMY[id]?.income||[0,0];lo+=a[0];hi+=a[1]});
  return [lo,hi];
 }
+
+function renderEmployment(){
+ const e=player.employment,j=workJob();
+ if(!j){
+  const list=Object.entries(LEGIT_JOBS).map(([id,x])=>`<div class="employment-card"><div class="job-banner"><span>${escapeHtml(x.company)}</span><span class="difficulty green">LEGIT</span></div><div class="employment-copy"><strong>${escapeHtml(x.title)}</strong><p>${escapeHtml(x.description)}</p></div><div class="job-metrics"><div><span>START</span><strong>${formatTime(x.start)}</strong></div><div><span>SHIFT</span><strong>${Math.round(x.duration/60)} hrs</strong></div><div><span>PAY</span><strong>${money(x.base_pay)}</strong></div><div><span>PAYDAY</span><strong>Weekly</strong></div></div>${x.requires_vehicle?'<div class="notice warning">Requires an active vehicle.</div>':''}<div class="job-action">${btn('Take Job',`takeLegitJob:${id}`,'','primary')}</div></div>`).join('');
+  return `${back()}<div class="section-title">EMPLOYMENT</div><div class="card corporate-card"><div class="hero-kicker">MOTIONWORKS CAREER PORTAL</div><h2>Find Your Next Underpaid Opportunity</h2><div class="muted">Legit work is slower, safer, and paid weekly.</div></div><div class="employment-list">${list}</div>`;
+ }
+ const t=currentWorkTier(j),n=nextWorkTier(j),c=canClockIn();
+ return `${back()}<div class="card corporate-card"><div class="hero-kicker">CURRENT EMPLOYER</div><h2>${escapeHtml(j.company)}</h2><div class="muted">${escapeHtml(t.title)} · ${money(workShiftPay(j))}/shift · Weekly payday</div></div><div class="dashboard-grid">${profileStat('Completed Shifts',e.shifts_worked)}${profileStat('Pending Pay',money(e.pending_pay))}${profileStat('Work Rep',player.work_rep||0)}${profileStat('Write-ups',`${e.writeups}/3`)}</div><div class="card"><div class="section-title">NEXT SHIFT</div><div class="status-grid">${stat('Starts',formatTime(j.start))}${stat('Ends',formatTime(j.start+j.duration))}${stat('Length',`${Math.round(j.duration/60)} hours`)}</div><div class="notice ${c.ok?'good':'warning'}">${escapeHtml(c.ok?'You can clock in now.':c.msg)}</div>${btn('CLOCK IN','clockInLegit','',c.ok?'primary':'')}</div><div class="card"><div class="section-title">SENIORITY</div><div class="item-meta">${n?`${n.shifts-e.shifts_worked} more shifts until ${n.title} · ${money(n.pay)}/shift${n.bonus?` · ${money(n.bonus)} bonus`:''}`:'Top promotion reached.'}</div></div><div class="card"><div class="section-title">COMPANY POLICY</div><div class="result-line">No equipped weapons while clocked in.</div><div class="result-line">Three write-ups can get you fired.</div><div class="result-line">Pay is deposited weekly.</div>${btn('Quit Job','quitLegitJob','','danger')}</div>`;
+}
+
 function renderBank(){
  const inc=propertyIncomeEstimate(),up=dailyExpenseEstimate();
  return `${back()}<div class="card"><div class="section-title">CASH RESERVE</div>
@@ -792,6 +842,10 @@ function renderProfile(){
  ${profileStat('Achievements',`${player.achievements.length}/${Object.keys(ACHIEVEMENTS).length}`)}
  </div>
  <div class="section-title">CITY LIFE</div><div class="dashboard-grid">
+ ${profileStat('Current Job',workJob()?`${workJob().company} · ${currentWorkTier()?.title||workJob().title}`:'Unemployed')}
+ ${profileStat('Work Rep',player.work_rep||0)}
+ ${profileStat('Legit Shifts',player.stats.legit_shifts||0)}
+ ${profileStat('Legit Pay Earned',money(player.stats.legit_pay_earned||0))}
  ${profileStat('Protected Reserve',money(player.bank_cash||0))}
  ${profileStat('Property Income',money(player.stats.total_property_income||0))}
  ${profileStat('Lifetime Expenses',money(player.stats.total_expenses||0))}
@@ -817,6 +871,22 @@ function renderHowTo(){return `${btn('← Start','start','','back')}<div class="
  </div></div>`}
 
 const PATCH_NOTES_HISTORY=[
+ {
+  version:'Alpha 0.5',
+  title:'EMPLOYMENT & LEGIT HUSTLES',
+  notes:[
+   'NEW: Scheduled legitimate jobs with named fictional employers.',
+   'NEW: 8–9 hour shifts with modest entry-level pay and weekly payday.',
+   'NEW: Players must unequip weapons before clocking in.',
+   'NEW: Completed shifts build seniority, Work Rep and promotion progress.',
+   'NEW: Raises and bonuses unlock at 20, 40, 60 and 100 completed shifts.',
+   'NEW: Missed shifts create write-ups and repeated attendance problems can get players fired.',
+   'NEW: Workplace events, overtime, employer messages and sarcastic HR notifications.',
+   'NEW: Employment history and legit-career stats are tracked.',
+   'NEW: Street-side messages can tempt employed players with faster risky money.'
+  ]
+ },
+
  {
   version:'Alpha 0.5',
   title:'CREWS & TERRITORY',
@@ -1362,6 +1432,9 @@ function endDay(){
   `Moves: ${player.daily.successes} successful / ${player.daily.failures} failed`,
   `Trap Attention: ${player.trap.attention}%`
  ];
+ const missed=processMissedWorkDay();
+ const payday=paydayIfDue();
+ const temptation=streetTemptationMessage();
  const night=overnightEventLines();
  const income=collectPropertyIncome();
  const expenses=chargeDailyExpenses();
@@ -1388,6 +1461,9 @@ function endDay(){
  ];
  result(`DAY ${player.day} — CITY LIFE REPORT`,[
   ...summary,
+  ...(missed.length?['--- WORK ---',...missed]:[]),
+  ...(payday.length?['--- PAYDAY ---',...payday]:[]),
+  ...(temptation?['--- PHONE ---',`Unknown Number: ${temptation}`]:[]),
   '--- PROPERTY & BILLS ---',
   ...economy,
   '--- NIGHT REPORT ---',
@@ -1417,7 +1493,7 @@ function handle(action){
  if(action==='deleteSave'){if(confirm('Delete your Federal Motion local save?')){localStorage.removeItem(SAVE_KEY);localStorage.removeItem(LEGACY_SAVE_KEY);player=null;screen='start';render()}return}
  if(action==='start'){screen='start';render();return}
  if(action==='home'){screen='home';payload=null;render();return}
- const direct=['moves','street','supplier','black','weapons','armor','equip','crew','map','stash','bank','profile','playerCrew','territories','upgrades','hospital','status','market','phone','objectives','achievements','skills','laylow','vehicles','properties','howto','patch','leaderboard','ownerWallet','ownerDashboard'];
+ const direct=['moves','street','supplier','black','weapons','armor','equip','crew','map','stash','bank','employment','profile','playerCrew','territories','upgrades','hospital','status','market','phone','objectives','achievements','skills','laylow','vehicles','properties','howto','patch','leaderboard','ownerWallet','ownerDashboard'];
  if(direct.includes(action)){screen=action;payload=null;render();if(action==='leaderboard')setTimeout(loadLeaderboard,0);if(action==='ownerDashboard')setTimeout(loadOwnerDashboard,0);if(action==='playerCrew'||action==='territories')refreshCrewWorld().then(()=>render());return}
  if(action==='phoneShop'){screen='phoneShop';payload=null;app().innerHTML=header()+renderPhoneShop()+`<div class="footer-note">Local + cloud save active.</div>`;return}
  if(action==='phoneMessages'){app().innerHTML=header()+renderMessages()+`<div class="footer-note">Local + cloud save active.</div>`;return}
@@ -1555,6 +1631,10 @@ function handle(action){
    result('TERRITORY HOLD REWARD',lines);
   });return
  }
+
+ if(action.startsWith('takeLegitJob:')){const id=action.split(':')[1],j=LEGIT_JOBS[id];if(!j)return;player.employment={...player.employment,current_job:id,shifts_worked:0,week_shifts:0,writeups:0,missed_shifts:0,last_shift_day:0};player.messages.unshift({from:`${j.company} HR`,text:`Welcome aboard. First shift starts at ${formatTime(j.start)}. Try not to make us regret this.`,day:player.day});saveGame();result('YOU GOT THE JOB',[`${j.company} · ${j.title}`,`Shift: ${formatTime(j.start)}–${formatTime(j.start+j.duration)}`,`Starting pay: ${money(j.base_pay)}/shift`,`Payday: weekly`,`Report to work unarmed.`]);return}
+ if(action==='quitLegitJob'){const j=workJob();if(!j)return;player.employment.employment_history.unshift({company:j.company,title:currentWorkTier(j)?.title||j.title,shifts:player.employment.shifts_worked,status:'Quit'});player.employment.current_job=null;saveGame();result('JOB ENDED',[`You quit ${j.company}.`,`Pending pay remains scheduled for payday.`]);return}
+ if(action==='clockInLegit'){const j=workJob(),c=canClockIn();if(!c.ok){result('CAN’T CLOCK IN',[c.msg]);return}const oldN=player.employment.shifts_worked,pay=workShiftPay(j);player.time=j.start;advanceTime(j.duration);player.location='trap';player.employment.last_shift_day=player.day;player.employment.shifts_worked++;player.employment.week_shifts++;player.employment.pending_pay+=pay;player.stats.legit_shifts=(player.stats.legit_shifts||0)+1;player.work_rep=(player.work_rep||0)+1;addSkillXP(j.skill,6);const lines=[`${j.company} · ${currentWorkTier(j).title}`,`Shift completed: ${Math.round(j.duration/60)} hours`,`Pending pay: +${money(pay)}`,`Total pending pay: ${money(player.employment.pending_pay)}`,`Work Rep: ${player.work_rep}`,`WORKPLACE: ${workEvent()}`,...applyWorkMilestone(j,oldN,player.employment.shifts_worked)];if(Math.random()<.18){player.employment.pending_pay+=18;advanceTime(180);lines.push('OVERTIME: +$18 pending pay · +3 hours')}streetTemptationMessage();saveGame();result('SHIFT COMPLETE',lines);return}
  if(action==='sleep'){endDay();return}
  if(action.startsWith('doMove:')){
   const id=action.split(':')[1],m=MOVES[id],r=m?requirement(m):'Move unavailable';

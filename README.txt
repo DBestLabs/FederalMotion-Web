@@ -62,3 +62,11 @@ PUBLIC CHANGELOG SYSTEM
 - In-game Patch Notes now keep a versioned history instead of one hard-coded release.
 - Latest public changes appear first while older public notes remain visible.
 - Current changelog covers Alpha 0.3 UI, Alpha 0.3 balance/consequences, Alpha 0.4 City Life, Alpha 0.4 Prep & Risk, crew balance fixes, and Alpha 0.5 Crews & Territory.
+
+ALPHA 0.5 — EMPLOYMENT & LEGIT HUSTLES
+- Scheduled legit jobs with humorous fictional employers.
+- 8–9 hour shifts paying roughly $40–$50 at entry level.
+- Weekly pending-pay system.
+- No equipped weapons while clocked in.
+- Raises, bonuses and promotions at 20/40/60/100 completed shifts.
+- Work Rep, write-ups, firing, workplace events and employment history.
