@@ -44,3 +44,16 @@ ALPHA 0.4 — PREP & RISK CLARITY PATCH
 ALPHA 0.4 — CREW BALANCE FIX
 - Crew payout sharing has been rebalanced so bringing extra help does not consume nearly the entire score.
 - Extra preparation still improves success odds.
+
+ALPHA 0.5 — CREWS & TERRITORY
+- Create or join online player crews (10-member cap).
+- Public and invite-only crew options.
+- Crew ranks: Boss, Underboss, Lieutenant, Member.
+- Shared crew bank and crew reputation.
+- Six NPC-controlled city territories.
+- Territory battles build influence until a crew takes control.
+- Controlled zones grant gameplay bonuses.
+- Former NPC gangs build retake pressure and can challenge control later.
+- Hold rewards unlock at 2, 4 and 6 real-world days.
+- Signature product rewards and visible rare weapon-drop odds.
+- Territory battle cooldowns keep zone control from being spammed.
