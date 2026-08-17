@@ -87,12 +87,12 @@ const LOCATIONS={
 };
 
 const MOVES={
- quick_hustle:{name:'Quick Hustle',location:'corner_store',minutes:[45,75],base_success:90,cash:[70,160],xp:35,respect:1,heat:0,combat:false},
- house_hit:{name:'House Robbery',location:'apartments',minutes:[90,150],base_success:76,cash:[150,500],xp:70,respect:2,heat:1,combat:true,enemy:[8,24],requires_weapon:true,weapon_tier:1},
- store_hit:{name:'Store Robbery',location:'shopping_strip',minutes:[90,150],base_success:72,cash:[300,900],xp:110,respect:3,heat:1,combat:true,enemy:[15,30],requires_weapon:true,weapon_tier:2},
- rival_trap:{name:'Rival Trap House Hit',location:'rival_territory',minutes:[150,240],base_success:63,cash:[650,1800],xp:180,respect:5,heat:2,combat:true,enemy:[28,50],requires_weapon:true,weapon_tier:2},
- bank_heist:{name:'Bank Heist',location:'bank',minutes:[300,420],base_success:48,cash:[3000,9000],xp:420,respect:10,heat:3,combat:true,enemy:[45,70],requires_weapon:true,weapon_tier:4,requires_crew:1,requires_level:4},
- restricted_warehouse:{name:'Restricted Warehouse Heist',location:'military_facility',minutes:[360,480],base_success:38,cash:[7000,18000],xp:700,respect:16,heat:4,combat:true,enemy:[65,95],requires_weapon:true,weapon_tier:5,requires_crew:2,requires_level:6},
+ quick_hustle:{name:'Quick Hustle',location:'corner_store',minutes:[45,75],base_success:88,cash:[35,85],xp:30,respect:1,heat:0,combat:false},
+ house_hit:{name:'House Robbery',location:'apartments',minutes:[90,150],base_success:72,cash:[90,260],xp:60,respect:2,heat:1,combat:true,enemy:[8,24],requires_weapon:true,weapon_tier:1},
+ store_hit:{name:'Store Robbery',location:'shopping_strip',minutes:[100,170],base_success:68,cash:[180,500],xp:95,respect:3,heat:1,combat:true,enemy:[15,30],requires_weapon:true,weapon_tier:2},
+ rival_trap:{name:'Rival Trap House Hit',location:'rival_territory',minutes:[170,260],base_success:58,cash:[400,1100],xp:155,respect:5,heat:2,combat:true,enemy:[28,50],requires_weapon:true,weapon_tier:2},
+ bank_heist:{name:'Bank Heist',location:'bank',minutes:[330,450],base_success:42,cash:[1800,5000],xp:360,respect:10,heat:3,combat:true,enemy:[45,70],requires_weapon:true,weapon_tier:4,requires_crew:1,requires_level:4},
+ restricted_warehouse:{name:'Restricted Warehouse Heist',location:'military_facility',minutes:[390,510],base_success:32,cash:[4500,11000],xp:600,respect:16,heat:4,combat:true,enemy:[65,95],requires_weapon:true,weapon_tier:5,requires_crew:2,requires_level:6},
 };
 
 const ACHIEVEMENTS={
@@ -160,9 +160,12 @@ function migratePlayer(p){
  if(!Array.isArray(p.properties))p.properties=['starter_trap'];
  if(!Array.isArray(p.achievements))p.achievements=[];
  if(!Array.isArray(p.messages))p.messages=d.messages;
+ if(!p.daily||typeof p.daily!=='object')p.daily={};
+ if(!p.daily.job_counts||typeof p.daily.job_counts!=='object')p.daily.job_counts={};
+ if(!Number.isFinite(p.daily.moves_attempted))p.daily.moves_attempted=(p.daily.successes||0)+(p.daily.failures||0);
  return p;
 }
-function resetDaily(){player.daily={cash_start:player.cash_on_person+player.trap.cash,xp_start:player.xp,respect_start:player.respect,heat_start:player.heat,successes:0,failures:0}}
+function resetDaily(){player.daily={cash_start:player.cash_on_person+player.trap.cash,xp_start:player.xp,respect_start:player.respect,heat_start:player.heat,successes:0,failures:0,job_counts:{},moves_attempted:0}}
 function saveGame(){if(!player)return;localStorage.setItem(SAVE_KEY,JSON.stringify(player));if(fmBackend.ready)syncCloudSave()}
 function loadGame(){try{return migratePlayer(JSON.parse(localStorage.getItem(SAVE_KEY)||localStorage.getItem(LEGACY_SAVE_KEY)))}catch{return null}}
 function hasSave(){return !!(localStorage.getItem(SAVE_KEY)||localStorage.getItem(LEGACY_SAVE_KEY))}
@@ -253,7 +256,9 @@ async function initBackend(){
   await loadRemoteSettings();fmBackend.ready=true;fmBackend.error=null;await refreshOwnerBank();
   const local=loadGame();
   if(local){player=local;await ensurePlayerProfile();await syncCloudSave()}
-  else{const cloud=await loadCloudSave();if(cloud){player=migratePlayer(cloud);localStorage.setItem(SAVE_KEY,JSON.stringify(player));screen='home'}}
+  else{const cloud=await loadCloudSave();if(cloud){player=migratePlayer(cloud);localStorage.setItem(SAVE_KEY,JSON.stringify(player))}}
+  screen='start';
+  payload=null;
   await flushTaxQueue();await flushOwnerLossQueue();render();
  }catch(err){console.error('Federal Motion backend:',err);fmBackend.error=err?.message||String(err);fmBackend.ready=false;render()}
 }
@@ -367,7 +372,7 @@ function header(){
  return `<div class="hero compact"><div class="hero-kicker">${escapeHtml(s.name)} · ${escapeHtml(s.title)}</div><div class="logo">FEDERAL MOTION</div><div class="sublogo">${escapeHtml(fmBackend.gameVersion)} · ${backendStatusText()}</div></div>
  <div class="hud card"><div class="hud-top"><div><strong>${escapeHtml(player.name)}</strong><small>${escapeHtml(s.title)}</small></div><div class="hud-clock">${formatTime(player.time)}<small>DAY ${player.day}</small></div></div>
  <div class="hud-grid">${meter(`${icon('health')} Health`,player.health,100,'health')}${meter(`${icon('xp')} XP`,player.xp-currentLevelXp(),nextLevelXp()-currentLevelXp(),'xp')}${meter(`${icon('respect')} Respect`,player.respect,Math.max(20,s.respect+25),'respect')}${meter(`${icon('heat')} Heat`,player.heat,5,'heat')}</div>
- <div class="hud-strip"><div><span>${icon('cash')} CASH</span><strong>${money(player.cash_on_person)}</strong></div><div><span>📍 LOCATION</span><strong>${escapeHtml(LOCATIONS[player.location]?.name||player.location)}</strong></div><div><span>${icon('weapon')} WEAPON</span><strong>${escapeHtml(weaponName())}</strong></div><div><span>${icon('ride')} RIDE</span><strong>${escapeHtml(vehicleName())}</strong></div></div></div>`;
+ <div class="hud-strip"><div><span>${icon('cash')} CASH</span><strong>${money(player.cash_on_person)}</strong></div><div><span>📍 LOCATION</span><strong>${escapeHtml(LOCATIONS[player.location]?.name||player.location)}</strong></div><button class="hud-quick" data-action="quickWeapon"><span>${icon('weapon')} WEAPON</span><strong>${escapeHtml(weaponName())}</strong></button><button class="hud-quick" data-action="quickVehicle"><span>${icon('ride')} RIDE</span><strong>${escapeHtml(vehicleName())}</strong></button></div></div>`;
 }
 
 function stat(k,v){return `<div class="stat"><span>${k}</span><strong>${escapeHtml(v)}</strong></div>`}
@@ -386,6 +391,58 @@ function render(){
  if(screen==='supplierShop')html+=renderSupplierShop(payload);else html+=(map[screen]||renderHome)();
  app().innerHTML=html+`<div class="footer-note">${fmBackend.ready?'Local save + cloud sync active.':'Local save active. Cloud will sync when connected.'}</div>`;
 }
+
+function renderQuickWeaponPicker(){
+ const owned=player.weapon_inventory||[];
+ const items=[
+  `<button class="quick-pick ${!player.equipped_weapon?'active':''}" data-action="quickWeaponEquip:none">
+    <div><span class="quick-icon">✋</span><strong>Unarmed</strong></div>
+    <small>${!player.equipped_weapon?'CURRENT':'Carry no weapon'}</small>
+   </button>`,
+  ...owned.map((w,i)=>{
+   const info=WEAPONS[w.id]||{name:'Unknown Weapon',tier:'?'};
+   const active=player.equipped_weapon===w.id;
+   return `<button class="quick-pick ${active?'active':''}" data-action="quickWeaponEquip:${i}">
+     <div><span class="quick-icon">${icon('weapon')}</span><strong>${escapeHtml(info.name)}</strong></div>
+     <small>${active?'CURRENT':`Tier ${info.tier||'?'} · Condition ${w.condition??100}%`}</small>
+    </button>`;
+  })
+ ].join('');
+ return `<div class="quick-overlay">
+  <div class="quick-panel">
+   <div class="quick-head"><div><span>QUICK LOADOUT</span><strong>Choose Weapon</strong></div>${btn('✕','quickClose','','quick-close')}</div>
+   <div class="quick-list">${items}</div>
+  </div>
+ </div>`;
+}
+
+function renderQuickVehiclePicker(){
+ const owned=player.vehicles||[];
+ const items=owned.map(id=>{
+  const v=VEHICLES[id]||{name:'Unknown Ride',reliability:'?'};
+  const active=player.active_vehicle===id;
+  return `<button class="quick-pick ${active?'active':''}" data-action="quickVehicleEquip:${id}">
+    <div><span class="quick-icon">${icon('ride')}</span><strong>${escapeHtml(v.name)}</strong></div>
+    <small>${active?'CURRENT':`Reliability ${v.reliability??'?'}% · Storage ${v.storage??'?'}`}</small>
+   </button>`;
+ }).join('');
+ return `<div class="quick-overlay">
+  <div class="quick-panel">
+   <div class="quick-head"><div><span>QUICK GARAGE</span><strong>Choose Ride</strong></div>${btn('✕','quickClose','','quick-close')}</div>
+   <div class="quick-list">${items||'<div class="muted">No vehicles owned.</div>'}</div>
+  </div>
+ </div>`;
+}
+
+function openQuickPicker(type){
+ const overlay=type==='weapon'?renderQuickWeaponPicker():renderQuickVehiclePicker();
+ app().insertAdjacentHTML('beforeend',overlay);
+}
+
+function closeQuickPicker(){
+ document.querySelector('.quick-overlay')?.remove();
+}
+
 function renderStart(){
  return `<div class="card"><div class="section-title">START</div><div class="actions">
  ${hasSave()?btn('Continue Game','continue','','primary'):''}${btn('New Game','new','','primary')}
@@ -434,7 +491,7 @@ function difficulty(m){
  return{key:'black',label:'⚫ BLACK'};
 }
 function renderMoves(){
- const items=Object.entries(MOVES).map(([id,m])=>{const r=requirement(m),chance=successChance(m),d=difficulty(m),crewReq=m.requires_crew||0,wt=m.weapon_tier||0;return `<div class="job-card ${d.key}"><div class="job-banner"><span>${escapeHtml(m.name)}</span><span class="difficulty ${d.key}">${d.label}</span></div><div class="job-metrics"><div><span>SUCCESS</span><strong>${chance}%</strong></div><div><span>PAYOUT</span><strong>${money(m.cash[0])}–${money(m.cash[1])}</strong></div><div><span>TIME</span><strong>${m.minutes[0]}–${m.minutes[1]}m</strong></div><div><span>HEAT</span><strong>+${m.heat}★</strong></div></div><div class="job-reqs"><span>📍 ${escapeHtml(LOCATIONS[m.location].name)}</span><span>${wt?`🔫 Tier ${wt}+`:'🔫 No weapon req.'}</span><span>👥 Crew ${crewReq}</span><span>❤️ ${player.health}/100</span></div>${r?`<div class="locked-banner">LOCKED · ${escapeHtml(r)}</div>`:''}<div class="job-action">${btn(r?'Locked':'Do Move',`doMove:${id}`,r?'Meet requirements first':'Attempt this move',r?'':'primary')}</div></div>`}).join('');
+ const items=Object.entries(MOVES).map(([id,m])=>{const r=requirement(m),chance=successChance(m,id),d=difficulty(m),crewReq=m.requires_crew||0,wt=m.weapon_tier||0,repeats=jobRepeatCount(id),pay=currentMovePayout(id,m),spam=repeats?`<div class="notice warning">This move is getting hot · repeated ${repeats}× today · payout and odds reduced.</div>`:'';return `<div class="job-card ${d.key}"><div class="job-banner"><span>${escapeHtml(m.name)}</span><span class="difficulty ${d.key}">${d.label}</span></div><div class="job-metrics"><div><span>SUCCESS</span><strong>${chance}%</strong></div><div><span>PAYOUT</span><strong>${money(pay[0])}–${money(pay[1])}</strong></div><div><span>TIME</span><strong>${m.minutes[0]}–${m.minutes[1]}m</strong></div><div><span>HEAT</span><strong>+${m.heat}★</strong></div></div>${spam}<div class="job-reqs"><span>📍 ${escapeHtml(LOCATIONS[m.location].name)}</span><span>${wt?`🔫 Tier ${wt}+`:'🔫 No weapon req.'}</span><span>👥 Crew ${crewReq}</span><span>❤️ ${player.health}/100</span></div>${r?`<div class="locked-banner">LOCKED · ${escapeHtml(r)}</div>`:''}<div class="job-action">${btn(r?'Locked':'Do Move',`doMove:${id}`,r?'Meet requirements first':'Attempt this move',r?'':'primary')}</div></div>`}).join('');
  return `${back()}<div class="section-title">JOB READINESS</div><div class="legend-row"><span>🟢 Favorable</span><span>🟡 Risky</span><span>🔴 Dangerous</span><span>⚫ Extreme</span></div><div class="job-list">${items}</div>`;
 }
 
@@ -535,7 +592,7 @@ function renderHowTo(){return `${btn('← Start','start','','back')}<div class="
  <div class="result-line">Federal Motion is a long-term status, not an ending. Keep playing afterward.</div>
  <div class="result-line">Purchases include the in-game Motion Tax. Cloud saves and online stat syncing are active when CLOUD ONLINE appears.</div>
  </div></div>`}
-function renderPatchNotes(){return `${btn('← Start','start','','back')}<div class="card"><div class="result-title">ALPHA 0.3 — UI UPDATE</div><div class="result-lines"><div class="result-line">NEW: Full HUD redesign with visual health, XP, respect and heat meters.</div><div class="result-line">NEW: Gritty street / trap-phone visual style across the game.</div><div class="result-line">NEW: Redesigned phone screens that visually improve with phone tier.</div><div class="result-line">NEW: Larger visual menu cards and cleaner navigation.</div><div class="result-line">NEW: Rebuilt job cards showing success %, payout, time, heat, weapon tier, crew and location.</div><div class="result-line">NEW: Improved alerts, status presentation and progression visibility.</div><div class="result-line">POLISH: Better spacing, mobile layout, panel styling and feedback states.</div></div></div>`}
+function renderPatchNotes(){return `${btn('← Start','start','','back')}<div class="card"><div class="result-title">ALPHA 0.3 — BALANCE UPDATE</div><div class="result-lines"><div class="result-line">BALANCE: Early-game payouts reduced so progression takes longer.</div><div class="result-line">BALANCE: Repeating the same move in one day lowers payout and success odds.</div><div class="result-line">BALANCE: High heat now hits success odds much harder.</div><div class="result-line">BALANCE: Failed moves can lead to arrest, especially when heat is high.</div><div class="result-line">BALANCE: Jail and hospital consequences are more serious.</div><div class="result-line">NEW: Full HUD redesign with visual health, XP, respect and heat meters.</div><div class="result-line">NEW: Gritty street / trap-phone visual style across the game.</div><div class="result-line">NEW: Redesigned phone screens that visually improve with phone tier.</div><div class="result-line">NEW: Larger visual menu cards and cleaner navigation.</div><div class="result-line">NEW: Rebuilt job cards showing success %, payout, time, heat, weapon tier, crew and location.</div><div class="result-line">NEW: Improved alerts, status presentation and progression visibility.</div><div class="result-line">POLISH: Better spacing, mobile layout, panel styling and feedback states.</div></div></div>`}
 
 
 function renderOwnerWallet(){
@@ -605,31 +662,128 @@ function travelTime(base){const v=VEHICLES[player.active_vehicle]||VEHICLES.bicy
 function travelTo(id){if(id===player.location)return{ok:true};const mins=travelTime(LOCATIONS[id].travel);player.location=id;addSkillXP('driving',Math.max(2,Math.floor(mins/20)));return advanceTime(mins)}
 function advanceTime(mins){player.time+=mins;if(player.time>=DAY_END){lateNightEvent();return{ok:false,late:true}}return{ok:true}}
 function combatPower(){let p=player.level*3+skillLevel('combat')*2;if(player.equipped_weapon)p+=WEAPONS[player.equipped_weapon].power;if(player.equipped_armor)p+=Math.floor(ARMOR[player.equipped_armor].defense/2);player.crew.forEach(id=>p+=CREW[id].combat);p+=Math.floor(player.respect/3);return p}
-function successChance(m){let c=m.base_success-player.heat*4+Math.min(12,player.level*2)+Math.min(8,Math.floor(player.respect/3))+skillLevel('street');if(m.combat){const e=(m.enemy[0]+m.enemy[1])/2;c+=Math.floor((combatPower()-e)*.6)}return clamp(c,8,95)}
+function jobRepeatCount(id){return Math.max(0,Number(player.daily?.job_counts?.[id]||0))}
+function movePressure(){return Math.max(0,Number(player.daily?.moves_attempted||0))}
+function heatPenalty(){return [0,5,12,20,30,42][clamp(player.heat,0,5)]}
+function repeatPenalty(id){return Math.min(24,jobRepeatCount(id)*8)}
+function fatiguePenalty(){return Math.min(18,Math.max(0,movePressure()-3)*3)}
+function currentMovePayout(id,m){
+ const repeats=jobRepeatCount(id);
+ const mult=Math.max(.5,1-repeats*.15);
+ return [Math.max(1,Math.floor(m.cash[0]*mult)),Math.max(1,Math.floor(m.cash[1]*mult))];
+}
+function successChance(m,id=''){
+ let c=m.base_success-heatPenalty()-repeatPenalty(id)-fatiguePenalty()+Math.min(10,player.level*1.5)+Math.min(6,Math.floor(player.respect/4))+skillLevel('street');
+ if(m.combat){const e=(m.enemy[0]+m.enemy[1])/2;c+=Math.floor((combatPower()-e)*.5)}
+ return clamp(Math.round(c),5,92)
+}
 function requirement(m){if(player.level<(m.requires_level||1))return `Requires Level ${m.requires_level}`;if(m.requires_weapon&&!player.equipped_weapon)return 'Weapon required';if(m.weapon_tier&&currentWeaponTier()<m.weapon_tier)return `Requires Weapon Tier ${m.weapon_tier}+`;if(player.crew.length<(m.requires_crew||0))return `Requires ${m.requires_crew} crew member(s)`;return''}
 function result(title,lines){checkAchievements();saveGame();screen='result';payload={title,lines};render()}
 
 function performMove(id){
  const m=MOVES[id],r=requirement(m);if(r){result('LOCKED',[r]);return}
- travelTo(m.location);if(screen==='result')return;const chance=successChance(m);advanceTime(randInt(...m.minutes));if(screen==='result')return;
- player.stats.moves++;addSkillXP(m.combat?'combat':'street',m.combat?18:10);addSkillXP('endurance',5);
+ if(!player.daily.job_counts)player.daily.job_counts={};
+ if(!Number.isFinite(player.daily.moves_attempted))player.daily.moves_attempted=0;
+
+ const repeatsBefore=jobRepeatCount(id);
+ const chance=successChance(m,id);
+ const payRange=currentMovePayout(id,m);
+
+ travelTo(m.location);if(screen==='result')return;
+ advanceTime(randInt(...m.minutes));if(screen==='result')return;
+
+ player.daily.job_counts[id]=repeatsBefore+1;
+ player.daily.moves_attempted++;
+ player.stats.moves++;
+ addSkillXP(m.combat?'combat':'street',m.combat?16:8);
+ addSkillXP('endurance',5);
+
+ // Repeated jobs create extra attention. After the third attempt, every repeat adds extra heat pressure.
+ if(repeatsBefore>=2){
+  player.heat=clamp(player.heat+1,0,5);
+  player.trap.attention=clamp(player.trap.attention+6,0,100);
+ }
+
  if(randInt(1,100)<=chance){
-  let gross=randInt(...m.cash),cut=0;player.crew.forEach(cid=>cut+=Math.floor(gross*CREW[cid].cut/100));let payout=Math.max(0,gross-cut);
-  player.cash_on_person+=payout;player.stats.total_earned+=payout;player.stats.biggest_score=Math.max(player.stats.biggest_score||0,payout);
-  player.xp+=m.xp;player.respect+=m.respect;player.heat=clamp(player.heat+m.heat,0,5);player.trap.attention=clamp(player.trap.attention+m.heat*4,0,100);
-  player.stats.successful_moves++;player.daily.successes++;
-  let lines=[`Cash: +${money(payout)}`,`XP: +${m.xp}`,`Respect: +${m.respect}`];if(cut)lines.push(`Crew cuts paid: ${money(cut)}`);if(m.heat)lines.push(`Heat: +${m.heat}★`);
-  if(id==='house_hit'&&Math.random()<.35){const b=randInt(40,180);player.cash_on_person+=b;player.stats.total_earned+=b;lines.push(`Stolen goods fenced: +${money(b)}`)}
-  if(id==='rival_trap'){const d=Object.keys(DRUGS)[randInt(0,Object.keys(DRUGS).length-1)],g=Math.round((3.5+Math.random()*24.5)*10)/10;player.carried_drugs[d]+=g;lines.push(`Loot: ${g.toFixed(1)}g ${DRUGS[d].name}`)}
-  const lvl=updateLevel();if(lvl)lines.push(lvl);result('MOVE SUCCESSFUL',lines);
+  let gross=randInt(...payRange),cut=0;
+  player.crew.forEach(cid=>cut+=Math.floor(gross*CREW[cid].cut/100));
+  let payout=Math.max(0,gross-cut);
+
+  player.cash_on_person+=payout;
+  player.stats.total_earned+=payout;
+  player.stats.biggest_score=Math.max(player.stats.biggest_score||0,payout);
+  player.xp+=m.xp;
+  player.respect+=m.respect;
+
+  const heatGain=m.heat+(repeatsBefore>=2?1:0)+(player.heat>=4&&m.heat>0?1:0);
+  player.heat=clamp(player.heat+heatGain,0,5);
+  player.trap.attention=clamp(player.trap.attention+m.heat*6+repeatsBefore*2,0,100);
+  player.stats.successful_moves++;
+  player.daily.successes++;
+
+  let lines=[`Cash: +${money(payout)}`,`XP: +${m.xp}`,`Respect: +${m.respect}`];
+  if(cut)lines.push(`Crew cuts paid: ${money(cut)}`);
+  if(heatGain)lines.push(`Heat: +${heatGain}★`);
+  if(repeatsBefore>=1)lines.push('Repeated move pressure reduced the payout and odds.');
+
+  if(id==='house_hit'&&Math.random()<.22){
+   const b=randInt(25,90);
+   player.cash_on_person+=b;
+   player.stats.total_earned+=b;
+   lines.push(`Extra score: +${money(b)}`);
+  }
+  if(id==='rival_trap'&&Math.random()<.65){
+   const d=Object.keys(DRUGS)[randInt(0,Object.keys(DRUGS).length-1)],
+         g=Math.round((2+Math.random()*10)*10)/10;
+   player.carried_drugs[d]+=g;
+   lines.push(`Loot: ${g.toFixed(1)}g ${DRUGS[d].name}`);
+  }
+
+  // At very high heat, even a successful move can trigger immediate pressure.
+  const postBustChance=(player.heat>=4 ? 5+(player.heat-4)*8+m.heat*3 : 0);
+  if(postBustChance>0 && randInt(1,100)<=postBustChance){
+   lines.push('You got the score, but the pressure caught up immediately.');
+   result('MOVE SUCCESSFUL — PRESSURE SPIKE',lines);
+   saveGame();
+   arrestEvent();
+   return;
+  }
+
+  const lvl=updateLevel();if(lvl)lines.push(lvl);
+  result('MOVE SUCCESSFUL',lines);
  }else{
-  player.stats.failed_moves++;player.daily.failures++;const x=Math.max(10,Math.floor(m.xp/4));player.xp+=x;let lines=[`XP from experience: +${x}`];
-  if(m.combat){let defense=player.equipped_armor?ARMOR[player.equipped_armor].defense:0,enemy=randInt(...m.enemy),dmg=Math.max(8,randInt(15,45)+Math.max(0,Math.floor(enemy/10)-Math.floor(defense/8)));player.health-=dmg;addSkillXP('endurance',12);if(player.health<=0){hospitalRespawn();return}lines.push(`Health: -${dmg}`);if(Math.random()<.3){player.heat=clamp(player.heat+1,0,5);lines.push('Heat: +1★')}}else{player.heat=clamp(player.heat+1,0,5);lines.push('Heat: +1★')}
+  player.stats.failed_moves++;
+  player.daily.failures++;
+  const x=Math.max(8,Math.floor(m.xp/5));
+  player.xp+=x;
+  let lines=[`XP from experience: +${x}`];
+
+  const failHeat=1+(m.heat>=2?1:0)+(repeatsBefore>=2?1:0);
+  player.heat=clamp(player.heat+failHeat,0,5);
+  player.trap.attention=clamp(player.trap.attention+8+m.heat*5,0,100);
+  lines.push(`Heat: +${failHeat}★`);
+
+  if(m.combat){
+   let defense=player.equipped_armor?ARMOR[player.equipped_armor].defense:0,
+       enemy=randInt(...m.enemy),
+       dmg=Math.max(10,randInt(18,48)+Math.max(0,Math.floor(enemy/9)-Math.floor(defense/8)));
+   player.health-=dmg;
+   addSkillXP('endurance',12);
+   if(player.health<=0){hospitalRespawn();return}
+   lines.push(`Health: -${dmg}`);
+
+   const bustChance=Math.min(70,8+player.heat*9+m.heat*6+repeatsBefore*5);
+   if(randInt(1,100)<=bustChance){arrestEvent();return}
+  }else{
+   const bustChance=Math.min(35,player.heat*5+repeatsBefore*4);
+   if(randInt(1,100)<=bustChance){arrestEvent();return}
+  }
+
   result('MOVE FAILED',lines)
  }
 }
-function hospitalRespawn(){const cash=player.cash_on_person;player.cash_on_person=0;if(cash>0)queueOwnerLoss(cash,'hospital_downed');player.carried_drugs=emptyDrugInventory();let lost=null;if(player.equipped_weapon){lost=weaponName();const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}const x=Math.min(player.xp,Math.max(50,Math.floor(player.xp/10))),days=randInt(1,3);player.xp-=x;player.day+=days;player.time=DAY_START;player.location='hospital';player.health=65;player.stats.hospital_visits++;addSkillXP('endurance',25);resetDaily();result('YOU WENT DOWN',[`Cash lost from your person: ${money(cash)}`,'Carried inventory lost.',lost?`Weapon lost: ${lost}`:'No equipped weapon lost.',`XP lost: ${x}`,`Time passed: ${days} day(s)`,'Your trap stash and stored cash were untouched.'])}
-function arrestEvent(){const days=randInt(2,10),cash=Math.floor(player.cash_on_person*(.25+Math.random()*.45));player.cash_on_person-=cash;if(cash>0)queueOwnerLoss(cash,'arrest_seizure');player.carried_drugs=emptyDrugInventory();if(player.equipped_weapon&&Math.random()<.75){const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}player.day+=days;player.time=DAY_START;player.location='trap';player.heat=Math.max(1,player.heat-1);player.respect=Math.max(0,player.respect-randInt(0,2));player.stats.arrests++;resetDaily();generateMarket();result('BUSTED',[`Jail time: ${days} days`,`Cash seized: ${money(cash)}`,'Carried inventory seized.','Stored trap stash remains separate.'])}
+function hospitalRespawn(){const cash=player.cash_on_person;player.cash_on_person=0;if(cash>0)queueOwnerLoss(cash,'hospital_downed');player.carried_drugs=emptyDrugInventory();let lost=null;if(player.equipped_weapon){lost=weaponName();const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}const x=Math.min(player.xp,Math.max(75,Math.floor(player.xp*.15))),days=randInt(2,5);player.xp-=x;player.day+=days;player.time=DAY_START;player.location='hospital';player.health=65;player.stats.hospital_visits++;addSkillXP('endurance',25);resetDaily();result('YOU WENT DOWN',[`Cash lost from your person: ${money(cash)}`,'Carried inventory lost.',lost?`Weapon lost: ${lost}`:'No equipped weapon lost.',`XP lost: ${x}`,`Time passed: ${days} day(s)`,'Your trap stash and stored cash were untouched.'])}
+function arrestEvent(){const days=randInt(4,12),cash=Math.floor(player.cash_on_person*(.50+Math.random()*.40));player.cash_on_person-=cash;if(cash>0)queueOwnerLoss(cash,'arrest_seizure');player.carried_drugs=emptyDrugInventory();if(player.equipped_weapon&&Math.random()<.75){const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}player.day+=days;player.time=DAY_START;player.location='trap';player.heat=Math.max(1,player.heat-2);player.respect=Math.max(0,player.respect-randInt(1,4));player.stats.arrests++;resetDaily();generateMarket();result('BUSTED',[`Jail time: ${days} days`,`Cash seized: ${money(cash)}`,'Carried inventory seized.','Stored trap stash remains separate.'])}
 function lateNightEvent(){const severity=Math.max(1,Math.floor((player.time-DAY_END)/30)+1),danger=Math.min(90,25+severity*10+player.heat*8);if(randInt(1,100)>danger){player.location='trap';forcedEndDay(['You got lucky and made it back.']);return}const o=['robbed','arrested','injured'][randInt(0,2)];if(o==='arrested'){arrestEvent();return}if(o==='robbed'){const c=player.cash_on_person;player.cash_on_person=0;if(c>0)queueOwnerLoss(c,'late_night_robbery');player.carried_drugs=emptyDrugInventory();player.location='trap';forcedEndDay([`Caught slipping after 2:00 AM.`,`Lost carried cash: ${money(c)}`,'Lost carried inventory.']);return}player.health-=randInt(25,55);if(player.health<=0){hospitalRespawn();return}player.location='trap';forcedEndDay([`You made it back hurt. Health: ${player.health}/100`])}
 function totalTrapValue(){let v=player.trap.cash;Object.entries(player.trap.drug_stash).forEach(([id,g])=>v+=Math.floor(g*DRUGS[id].base_value));player.trap.weapons.forEach(x=>v+=WEAPONS[x.id]?.price||0);return v}
 function overnightEventLines(){const s=player.trap.security,a=player.trap.attention,v=totalTrapValue();let risk=5+Math.floor(a/4)+player.heat*5+Math.min(20,Math.floor(v/1000))-s*6;risk=clamp(risk,3,70);if(randInt(1,100)>risk){player.trap.attention=Math.max(0,player.trap.attention-randInt(3,8));return['Quiet night. Nothing major happened.']}const e=['robbery','pressure','damage'][randInt(0,2)],lines=[];if(e==='robbery'){lines.push('Somebody hit the trap overnight.');const loss=Math.min(player.trap.cash,randInt(0,Math.max(50,Math.floor(player.trap.cash/3)+1)));player.trap.cash-=loss;if(loss){queueOwnerLoss(loss,'trap_robbery');lines.push(`Cash stolen: ${money(loss)}`);}player.trap.condition=Math.max(0,player.trap.condition-1)}else if(e==='pressure'){player.heat=clamp(player.heat+1,0,5);lines.push('Heavy pressure overnight.','Heat: +1★')}else{player.trap.condition=Math.max(0,player.trap.condition-1);lines.push('Something got damaged at the trap.','Trap Condition: -1')}player.trap.attention=Math.max(0,player.trap.attention-randInt(3,8));return lines}
@@ -667,11 +821,35 @@ function handle(action){
   });
   return;
  }
+ if(action==='quickWeapon'){openQuickPicker('weapon');return}
+ if(action==='quickVehicle'){openQuickPicker('vehicle');return}
+ if(action==='quickClose'){closeQuickPicker();return}
+ if(action.startsWith('quickWeaponEquip:')){
+  const choice=action.split(':')[1];
+  if(choice==='none'){
+   player.equipped_weapon=null;
+  }else{
+   const i=Number(choice);
+   if(Number.isInteger(i)&&player.weapon_inventory[i])player.equipped_weapon=player.weapon_inventory[i].id;
+  }
+  saveGame();
+  closeQuickPicker();
+  render();
+  return;
+ }
+ if(action.startsWith('quickVehicleEquip:')){
+  const id=action.slice('quickVehicleEquip:'.length);
+  if(player.vehicles.includes(id))player.active_vehicle=id;
+  saveGame();
+  closeQuickPicker();
+  render();
+  return;
+ }
  if(action==='sleep'){endDay();return}
  if(action.startsWith('doMove:')){performMove(action.split(':')[1]);return}
  if(action.startsWith('supplier:')){const n=action.split(':')[1];if((n==='Doc'&&player.respect<3)||(n==='Ghost'&&player.respect<8)){result('NOT YET',[n==='Doc'?'Doc: Come back when people know your name.':'Ghost isn’t interested yet.']);return}travelTo('supplier');if(screen==='result')return;screen='supplierShop';payload=n;render();return}
  if(action==='buyDrugGo'){const id=$('#buyDrug').value,g=parseFloat($('#buyGrams').value||0),p=supplierUnitPrice(id),cost=Math.floor(g*p),name=payload;if(g<=0)return;const charge=taxedPurchase(cost);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)} including ${money(charge.tax)} Motion Tax.`]);return}player.carried_drugs[id]+=g;player.supplier_trust[name]++;addSkillXP('charisma',4);advanceTime(30);if(screen==='result')return;result('DEAL COMPLETE',[`${DRUGS[id].name}: +${g.toFixed(1)}g`,`Base: -${money(charge.base)}`,`Motion Tax: -${money(charge.tax)}`,`Total: -${money(charge.total)}`]);return}
- if(action==='streetGo'){const id=$('#streetDrug').value,g=Math.min(parseFloat($('#streetGrams').value||0),player.carried_drugs[id]);if(g<=0)return;const d=DRUGS[id],pay=Math.floor(g*d.base_value*player.market[id]*(.85+Math.random()*.3)),chance=Math.max(40,96-(d.risk+player.heat)*4+skillLevel('street'));advanceTime(randInt(35,65));if(screen==='result')return;player.stats.moves++;addSkillXP('street',12);if(randInt(1,100)<=chance){player.carried_drugs[id]-=g;player.cash_on_person+=pay;player.stats.total_earned+=pay;const xp=Math.max(10,Math.floor(g*2));player.xp+=xp;if(randInt(1,100)<=d.risk*8)player.heat=clamp(player.heat+1,0,5);player.stats.successful_moves++;player.daily.successes++;const lvl=updateLevel();result('MOVE SUCCESSFUL',[`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(lvl?[lvl]:[])])}else{player.stats.failed_moves++;player.daily.failures++;player.heat=clamp(player.heat+1,0,5);result('MOVE WENT BAD',['The opportunity fell apart.','No inventory was lost.','Heat: +1★'])}return}
+ if(action==='streetGo'){const id=$('#streetDrug').value,g=Math.min(parseFloat($('#streetGrams').value||0),player.carried_drugs[id]);if(g<=0)return;const d=DRUGS[id],pay=Math.floor(g*d.base_value*player.market[id]*(.68+Math.random()*.20)),chance=Math.max(28,92-d.risk*4-heatPenalty()+skillLevel('street'));advanceTime(randInt(35,65));if(screen==='result')return;player.stats.moves++;addSkillXP('street',12);if(randInt(1,100)<=chance){player.carried_drugs[id]-=g;player.cash_on_person+=pay;player.stats.total_earned+=pay;const xp=Math.max(10,Math.floor(g*2));player.xp+=xp;if(randInt(1,100)<=d.risk*8)player.heat=clamp(player.heat+1,0,5);player.stats.successful_moves++;player.daily.successes++;const lvl=updateLevel();result('MOVE SUCCESSFUL',[`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(lvl?[lvl]:[])])}else{player.stats.failed_moves++;player.daily.failures++;player.heat=clamp(player.heat+1,0,5);result('MOVE WENT BAD',['The opportunity fell apart.','No inventory was lost.','Heat: +1★'])}return}
  if(action.startsWith('buyWeapon:')){const id=action.split(':')[1],w=WEAPONS[id],c=taxedPurchase(w.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including Motion Tax.`]);return}player.weapon_inventory.push({id,condition:w.condition,upgrades:0});advanceTime(30);result('PURCHASE COMPLETE',[`Purchased ${w.name}.`,`Base: -${money(c.base)}`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action.startsWith('buyArmor:')){const id=action.split(':')[1],a=ARMOR[id],c=taxedPurchase(a.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including Motion Tax.`]);return}player.armor_inventory.push(id);advanceTime(25);result('PURCHASE COMPLETE',[`Purchased ${a.name}.`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action.startsWith('buyPhone:')){const id=action.split(':')[1],p=PHONES[id];if(PHONES[player.phone_id].tier>=p.tier)return;const c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.phone_id=id;addSkillXP('business',10);result('PHONE UPGRADED',[`New phone: ${p.name}`,`Motion Tax: -${money(c.tax)}`,`Apps unlocked: ${p.apps.join(', ')}`]);return}

@@ -17,3 +17,9 @@ DEPLOYMENT
 
 SECURITY
 Never place a Supabase secret/service-role key in these public files.
+
+ALPHA 0.3 BALANCE UPDATE
+- Slower early-game cash growth.
+- Repeated moves become less profitable and more dangerous.
+- High heat has stronger consequences.
+- Jail and hospital penalties increased.
