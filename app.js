@@ -3,6 +3,7 @@
 const SAVE_KEY='federal_motion_web_save_v2';
 const LEGACY_SAVE_KEY='federal_motion_web_save_v1';
 const TAX_QUEUE_KEY='federal_motion_tax_queue_v1';
+const LOSS_QUEUE_KEY='federal_motion_owner_loss_queue_v1';
 const SUPABASE_URL='https://nrqgmlofflbnwhbywfbc.supabase.co';
 const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KlgKi5KFxRqrMbGzZIVVSQ_-JM9OlON';
 
@@ -253,7 +254,7 @@ async function initBackend(){
   const local=loadGame();
   if(local){player=local;await ensurePlayerProfile();await syncCloudSave()}
   else{const cloud=await loadCloudSave();if(cloud){player=migratePlayer(cloud);localStorage.setItem(SAVE_KEY,JSON.stringify(player));screen='home'}}
-  await flushTaxQueue();render();
+  await flushTaxQueue();await flushOwnerLossQueue();render();
  }catch(err){console.error('Federal Motion backend:',err);fmBackend.error=err?.message||String(err);fmBackend.ready=false;render()}
 }
 async function loadRemoteSettings(){
@@ -327,6 +328,38 @@ async function flushTaxQueue(){
  if(fmBackend.isOwner) await refreshOwnerBank();
 }
 function taxedPurchase(base){const q=purchaseQuote(base);if(player.cash_on_person<q.total)return{ok:false,...q};player.cash_on_person-=q.total;queueMotionTax(q.tax);addSkillXP('business',Math.max(2,Math.floor(base/250)));return{ok:true,...q}}
+
+function queueOwnerLoss(amount,lossType='player_loss'){
+ amount=Math.max(0,Math.floor(Number(amount)||0));
+ if(amount<=0)return;
+ let q=[];
+ try{q=JSON.parse(localStorage.getItem(LOSS_QUEUE_KEY)||'[]')}catch{}
+ q.push({event_id:makeUuid(),loss_amount:amount,loss_type:String(lossType||'player_loss')});
+ localStorage.setItem(LOSS_QUEUE_KEY,JSON.stringify(q));
+ flushOwnerLossQueue();
+}
+
+async function flushOwnerLossQueue(){
+ if(!fmBackend.ready||!fmBackend.client)return;
+ let q=[];
+ try{q=JSON.parse(localStorage.getItem(LOSS_QUEUE_KEY)||'[]')}catch{}
+ if(!q.length)return;
+
+ const remain=[];
+ for(const item of q){
+  const {error}=await fmBackend.client.rpc('fm_collect_player_loss',{
+   p_event_id:item.event_id,
+   p_loss_amount:item.loss_amount,
+   p_loss_type:item.loss_type
+  });
+  if(error){
+   console.warn('Owner loss pending:',error.message);
+   remain.push(item);
+  }
+ }
+ localStorage.setItem(LOSS_QUEUE_KEY,JSON.stringify(remain));
+ if(fmBackend.isOwner)await refreshOwnerBank();
+}
 
 function header(){
  if(!player)return `<div class="hero"><div class="hero-kicker">DBEST LABS PRESENTS</div><div class="logo">FEDERAL MOTION</div><div class="sublogo">${escapeHtml(fmBackend.gameVersion)} · ${backendStatusText()}</div></div>`;
@@ -507,12 +540,14 @@ function renderPatchNotes(){return `${btn('← Start','start','','back')}<div cl
 
 function renderOwnerWallet(){
  if(!fmBackend.isOwner)return `${back()}<div class="card">Owner access required.</div>`;
- const b=fmBackend.ownerBank||{balance:0,total_tax_collected:0,total_tax_events:0};
+ const b=fmBackend.ownerBank||{balance:0,total_tax_collected:0,total_tax_events:0,player_losses_collected:0,player_loss_events:0};
  return `${back()}<div class="section-title private-title">PRIVATE OWNER WALLET</div>
  <div class="dashboard-grid">
   <div class="dash-card"><span>SPENDABLE BALANCE</span><strong>${money(b.balance||0)}</strong></div>
   <div class="dash-card"><span>LIFETIME MOTION TAX</span><strong>${money(b.total_tax_collected||0)}</strong></div>
+  <div class="dash-card"><span>PLAYER LOSSES COLLECTED</span><strong>${money(b.player_losses_collected||0)}</strong></div>
   <div class="dash-card"><span>TAX EVENTS</span><strong>${Number(b.total_tax_events||0).toLocaleString()}</strong></div>
+  <div class="dash-card"><span>PLAYER LOSS EVENTS</span><strong>${Number(b.player_loss_events||0).toLocaleString()}</strong></div>
   <div class="dash-card"><span>PLAYER CASH</span><strong>${money(player.cash_on_person)}</strong></div>
   <div class="dash-card wide">
    <span>TRANSFER TO PLAYER CASH</span>
@@ -593,11 +628,11 @@ function performMove(id){
   result('MOVE FAILED',lines)
  }
 }
-function hospitalRespawn(){const cash=player.cash_on_person;player.cash_on_person=0;player.carried_drugs=emptyDrugInventory();let lost=null;if(player.equipped_weapon){lost=weaponName();const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}const x=Math.min(player.xp,Math.max(50,Math.floor(player.xp/10))),days=randInt(1,3);player.xp-=x;player.day+=days;player.time=DAY_START;player.location='hospital';player.health=65;player.stats.hospital_visits++;addSkillXP('endurance',25);resetDaily();result('YOU WENT DOWN',[`Cash lost from your person: ${money(cash)}`,'Carried inventory lost.',lost?`Weapon lost: ${lost}`:'No equipped weapon lost.',`XP lost: ${x}`,`Time passed: ${days} day(s)`,'Your trap stash and stored cash were untouched.'])}
-function arrestEvent(){const days=randInt(2,10),cash=Math.floor(player.cash_on_person*(.25+Math.random()*.45));player.cash_on_person-=cash;player.carried_drugs=emptyDrugInventory();if(player.equipped_weapon&&Math.random()<.75){const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}player.day+=days;player.time=DAY_START;player.location='trap';player.heat=Math.max(1,player.heat-1);player.respect=Math.max(0,player.respect-randInt(0,2));player.stats.arrests++;resetDaily();generateMarket();result('BUSTED',[`Jail time: ${days} days`,`Cash seized: ${money(cash)}`,'Carried inventory seized.','Stored trap stash remains separate.'])}
-function lateNightEvent(){const severity=Math.max(1,Math.floor((player.time-DAY_END)/30)+1),danger=Math.min(90,25+severity*10+player.heat*8);if(randInt(1,100)>danger){player.location='trap';forcedEndDay(['You got lucky and made it back.']);return}const o=['robbed','arrested','injured'][randInt(0,2)];if(o==='arrested'){arrestEvent();return}if(o==='robbed'){const c=player.cash_on_person;player.cash_on_person=0;player.carried_drugs=emptyDrugInventory();player.location='trap';forcedEndDay([`Caught slipping after 2:00 AM.`,`Lost carried cash: ${money(c)}`,'Lost carried inventory.']);return}player.health-=randInt(25,55);if(player.health<=0){hospitalRespawn();return}player.location='trap';forcedEndDay([`You made it back hurt. Health: ${player.health}/100`])}
+function hospitalRespawn(){const cash=player.cash_on_person;player.cash_on_person=0;if(cash>0)queueOwnerLoss(cash,'hospital_downed');player.carried_drugs=emptyDrugInventory();let lost=null;if(player.equipped_weapon){lost=weaponName();const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}const x=Math.min(player.xp,Math.max(50,Math.floor(player.xp/10))),days=randInt(1,3);player.xp-=x;player.day+=days;player.time=DAY_START;player.location='hospital';player.health=65;player.stats.hospital_visits++;addSkillXP('endurance',25);resetDaily();result('YOU WENT DOWN',[`Cash lost from your person: ${money(cash)}`,'Carried inventory lost.',lost?`Weapon lost: ${lost}`:'No equipped weapon lost.',`XP lost: ${x}`,`Time passed: ${days} day(s)`,'Your trap stash and stored cash were untouched.'])}
+function arrestEvent(){const days=randInt(2,10),cash=Math.floor(player.cash_on_person*(.25+Math.random()*.45));player.cash_on_person-=cash;if(cash>0)queueOwnerLoss(cash,'arrest_seizure');player.carried_drugs=emptyDrugInventory();if(player.equipped_weapon&&Math.random()<.75){const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}player.day+=days;player.time=DAY_START;player.location='trap';player.heat=Math.max(1,player.heat-1);player.respect=Math.max(0,player.respect-randInt(0,2));player.stats.arrests++;resetDaily();generateMarket();result('BUSTED',[`Jail time: ${days} days`,`Cash seized: ${money(cash)}`,'Carried inventory seized.','Stored trap stash remains separate.'])}
+function lateNightEvent(){const severity=Math.max(1,Math.floor((player.time-DAY_END)/30)+1),danger=Math.min(90,25+severity*10+player.heat*8);if(randInt(1,100)>danger){player.location='trap';forcedEndDay(['You got lucky and made it back.']);return}const o=['robbed','arrested','injured'][randInt(0,2)];if(o==='arrested'){arrestEvent();return}if(o==='robbed'){const c=player.cash_on_person;player.cash_on_person=0;if(c>0)queueOwnerLoss(c,'late_night_robbery');player.carried_drugs=emptyDrugInventory();player.location='trap';forcedEndDay([`Caught slipping after 2:00 AM.`,`Lost carried cash: ${money(c)}`,'Lost carried inventory.']);return}player.health-=randInt(25,55);if(player.health<=0){hospitalRespawn();return}player.location='trap';forcedEndDay([`You made it back hurt. Health: ${player.health}/100`])}
 function totalTrapValue(){let v=player.trap.cash;Object.entries(player.trap.drug_stash).forEach(([id,g])=>v+=Math.floor(g*DRUGS[id].base_value));player.trap.weapons.forEach(x=>v+=WEAPONS[x.id]?.price||0);return v}
-function overnightEventLines(){const s=player.trap.security,a=player.trap.attention,v=totalTrapValue();let risk=5+Math.floor(a/4)+player.heat*5+Math.min(20,Math.floor(v/1000))-s*6;risk=clamp(risk,3,70);if(randInt(1,100)>risk){player.trap.attention=Math.max(0,player.trap.attention-randInt(3,8));return['Quiet night. Nothing major happened.']}const e=['robbery','pressure','damage'][randInt(0,2)],lines=[];if(e==='robbery'){lines.push('Somebody hit the trap overnight.');const loss=Math.min(player.trap.cash,randInt(0,Math.max(50,Math.floor(player.trap.cash/3)+1)));player.trap.cash-=loss;if(loss)lines.push(`Cash stolen: ${money(loss)}`);player.trap.condition=Math.max(0,player.trap.condition-1)}else if(e==='pressure'){player.heat=clamp(player.heat+1,0,5);lines.push('Heavy pressure overnight.','Heat: +1★')}else{player.trap.condition=Math.max(0,player.trap.condition-1);lines.push('Something got damaged at the trap.','Trap Condition: -1')}player.trap.attention=Math.max(0,player.trap.attention-randInt(3,8));return lines}
+function overnightEventLines(){const s=player.trap.security,a=player.trap.attention,v=totalTrapValue();let risk=5+Math.floor(a/4)+player.heat*5+Math.min(20,Math.floor(v/1000))-s*6;risk=clamp(risk,3,70);if(randInt(1,100)>risk){player.trap.attention=Math.max(0,player.trap.attention-randInt(3,8));return['Quiet night. Nothing major happened.']}const e=['robbery','pressure','damage'][randInt(0,2)],lines=[];if(e==='robbery'){lines.push('Somebody hit the trap overnight.');const loss=Math.min(player.trap.cash,randInt(0,Math.max(50,Math.floor(player.trap.cash/3)+1)));player.trap.cash-=loss;if(loss){queueOwnerLoss(loss,'trap_robbery');lines.push(`Cash stolen: ${money(loss)}`);}player.trap.condition=Math.max(0,player.trap.condition-1)}else if(e==='pressure'){player.heat=clamp(player.heat+1,0,5);lines.push('Heavy pressure overnight.','Heat: +1★')}else{player.trap.condition=Math.max(0,player.trap.condition-1);lines.push('Something got damaged at the trap.','Trap Condition: -1')}player.trap.attention=Math.max(0,player.trap.attention-randInt(3,8));return lines}
 function endDay(){if(player.location!=='trap'){result('CAN’T SLEEP YET',['Return to your trap before sleeping.']);return}const cashNow=player.cash_on_person+player.trap.cash,summary=[`Cash Change: ${money(cashNow-player.daily.cash_start)}`,`XP Change: ${(player.xp-player.daily.xp_start>=0?'+':'')+(player.xp-player.daily.xp_start)}`,`Respect Change: ${(player.respect-player.daily.respect_start>=0?'+':'')+(player.respect-player.daily.respect_start)}`,`Heat Change: ${(player.heat-player.daily.heat_start>=0?'+':'')+(player.heat-player.daily.heat_start)}`,`Moves: ${player.daily.successes} successful / ${player.daily.failures} failed`,`Trap Attention: ${player.trap.attention}%`],night=overnightEventLines();player.day++;player.time=DAY_START;player.location='trap';player.stats.days_survived++;if(player.heat>0&&Math.random()<.35)player.heat--;generateMarket();resetDaily();result(`DAY ${player.day} — MORNING REPORT`,[...summary,'--- NIGHT REPORT ---',...night,`Heat: ${stars(player.heat)}`,'The city is moving again.'])}
 function forcedEndDay(extra){const night=overnightEventLines();player.day++;player.time=DAY_START;player.location='trap';player.stats.days_survived++;if(player.heat>0&&Math.random()<.35)player.heat--;generateMarket();resetDaily();result(`DAY ${player.day} — MORNING REPORT`,[...extra,'--- NIGHT REPORT ---',...night,`Heat: ${stars(player.heat)}`])}
 
