@@ -9,7 +9,7 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KlgKi5KFxRqrMbGzZIVVSQ_-JM9OlON';
 const DAY_START=8*60, WARNING_TIME=24*60, DAY_END=26*60, MAX_HEAT=5, MAX_HEALTH=100;
 const DEFAULT_MOTION_TAX_RATE=.05;
 
-let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.2',error:null,ownerBank:null,isOwner:false};
+let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.3',error:null,ownerBank:null,isOwner:false,ownerDashboard:null};
 let player=null, screen='start', payload=null;
 
 const DRUGS={
@@ -124,6 +124,10 @@ const money=n=>`$${Math.round(n).toLocaleString()}`;
 const stars=h=>'★'.repeat(clamp(h,0,5))+'☆'.repeat(5-clamp(h,0,5));
 const formatTime=m=>{const x=((m%(24*60))+(24*60))%(24*60),h=Math.floor(x/60),min=x%60,ap=h<12?'AM':'PM';return `${h%12||12}:${String(min).padStart(2,'0')} ${ap}`};
 const escapeHtml=s=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+
+const ICONS={phone:'📱',cash:'💵',heat:'🚨',health:'❤️',xp:'⚡',respect:'👑',weapon:'🔫',armor:'🛡️',ride:'🚗',jobs:'🎯',street:'🧱',supplier:'🤝',market:'🛒',crew:'👥',map:'🗺️',garage:'🏎️',property:'🏠',stash:'📦',upgrade:'🛠️',laylow:'🌙',skills:'📈',objectives:'📋',achievements:'🏆',hospital:'🏥',status:'📊',sleep:'🛏️',save:'💾',owner:'💰',dashboard:'🛰️',alert:'⚠️'};
+function icon(k){return ICONS[k]||'•'}
+function meter(label,value,max,cls=''){const pct=clamp((Number(value)||0)/Math.max(1,max)*100,0,100);return `<div class="meter-block ${cls}"><div class="meter-label"><span>${escapeHtml(label)}</span><strong>${Math.round(value)}/${Math.round(max)}</strong></div><div class="meter"><div style="width:${pct}%"></div></div></div>`}
 
 function emptyDrugInventory(){return Object.fromEntries(Object.keys(DRUGS).map(k=>[k,0]))}
 function newPlayer(name='Player'){
@@ -325,19 +329,18 @@ async function flushTaxQueue(){
 function taxedPurchase(base){const q=purchaseQuote(base);if(player.cash_on_person<q.total)return{ok:false,...q};player.cash_on_person-=q.total;queueMotionTax(q.tax);addSkillXP('business',Math.max(2,Math.floor(base/250)));return{ok:true,...q}}
 
 function header(){
- if(!player)return `<div class="logo">FEDERAL MOTION</div><div class="sublogo">${escapeHtml(fmBackend.gameVersion)} · ${backendStatusText()}</div>`;
- const s=stageInfo(),p=Math.round(levelProgress()*100);
- return `<div class="logo">FEDERAL MOTION</div><div class="sublogo">${escapeHtml(fmBackend.gameVersion)} · ${backendStatusText()}</div>
- <div class="card"><div class="row"><span class="stage-badge">${escapeHtml(s.name)} · ${escapeHtml(s.title)}</span><span class="muted">Lv ${player.level} → ${player.level+1}</span></div><div class="progress"><div style="width:${p}%"></div></div>
- <div class="status-grid">
- ${stat('DAY',player.day)}${stat('TIME',formatTime(player.time))}${stat('LOCATION',LOCATIONS[player.location]?.name||player.location)}${stat('CASH',money(player.cash_on_person))}
- ${stat('LEVEL',player.level)}${stat('XP',`${player.xp}/${nextLevelXp()}`)}${stat('RESPECT',player.respect)}${stat('HEAT',stars(player.heat))}
- ${stat('HEALTH',`${player.health}/100`)}${stat('WEAPON',weaponName())}${stat('ARMOR',armorName())}${stat('RIDE',vehicleName())}
- </div></div>`;
+ if(!player)return `<div class="hero"><div class="hero-kicker">DBEST LABS PRESENTS</div><div class="logo">FEDERAL MOTION</div><div class="sublogo">${escapeHtml(fmBackend.gameVersion)} · ${backendStatusText()}</div></div>`;
+ const s=stageInfo();
+ return `<div class="hero compact"><div class="hero-kicker">${escapeHtml(s.name)} · ${escapeHtml(s.title)}</div><div class="logo">FEDERAL MOTION</div><div class="sublogo">${escapeHtml(fmBackend.gameVersion)} · ${backendStatusText()}</div></div>
+ <div class="hud card"><div class="hud-top"><div><strong>${escapeHtml(player.name)}</strong><small>${escapeHtml(s.title)}</small></div><div class="hud-clock">${formatTime(player.time)}<small>DAY ${player.day}</small></div></div>
+ <div class="hud-grid">${meter(`${icon('health')} Health`,player.health,100,'health')}${meter(`${icon('xp')} XP`,player.xp-currentLevelXp(),nextLevelXp()-currentLevelXp(),'xp')}${meter(`${icon('respect')} Respect`,player.respect,Math.max(20,s.respect+25),'respect')}${meter(`${icon('heat')} Heat`,player.heat,5,'heat')}</div>
+ <div class="hud-strip"><div><span>${icon('cash')} CASH</span><strong>${money(player.cash_on_person)}</strong></div><div><span>📍 LOCATION</span><strong>${escapeHtml(LOCATIONS[player.location]?.name||player.location)}</strong></div><div><span>${icon('weapon')} WEAPON</span><strong>${escapeHtml(weaponName())}</strong></div><div><span>${icon('ride')} RIDE</span><strong>${escapeHtml(vehicleName())}</strong></div></div></div>`;
 }
+
 function stat(k,v){return `<div class="stat"><span>${k}</span><strong>${escapeHtml(v)}</strong></div>`}
 function btn(label,action,small='',cls=''){return `<button class="btn ${cls}" data-action="${action}">${label}${small?`<small>${small}</small>`:''}</button>`}
 function back(){return btn('← Back','home','','back')}
+function menuCard(emoji,title,sub,action,kind=''){return `<button class="menu-card ${kind}" data-action="${action}"><div class="menu-icon">${emoji}</div><div class="menu-copy"><strong>${escapeHtml(title)}</strong><small>${escapeHtml(sub)}</small></div><div class="menu-arrow">›</div></button>`}
 function render(){
  let html=header();
  const map={
@@ -345,7 +348,7 @@ function render(){
   black:renderBlack,weapons:renderWeapons,armor:renderArmor,equip:renderEquip,crew:renderCrew,map:renderMap,stash:renderStash,
   upgrades:renderUpgrades,hospital:renderHospital,status:renderStatus,market:renderMarket,phone:renderPhone,objectives:renderObjectives,
   achievements:renderAchievements,skills:renderSkills,laylow:renderLayLow,vehicles:renderVehicles,properties:renderProperties,
-  howto:renderHowTo,patch:renderPatchNotes,leaderboard:renderLeaderboard,ownerWallet:renderOwnerWallet
+  howto:renderHowTo,patch:renderPatchNotes,leaderboard:renderLeaderboard,ownerWallet:renderOwnerWallet,ownerDashboard:renderOwnerDashboard
  };
  if(screen==='supplierShop')html+=renderSupplierShop(payload);else html+=(map[screen]||renderHome)();
  app().innerHTML=html+`<div class="footer-note">${fmBackend.ready?'Local save + cloud sync active.':'Local save active. Cloud will sync when connected.'}</div>`;
@@ -357,31 +360,32 @@ function renderStart(){
  ${hasSave()?btn('Delete Save','deleteSave','Erase local browser save','danger'):''}</div></div>`;
 }
 function renderHome(){
- const late=player.time>=WARNING_TIME?`<div class="notice">⚠ LATE NIGHT — 2:00 AM is the danger window.</div>`:'';
- const hot=player.heat>=4?`<div class="notice">🚨 HIGH HEAT — success odds, supplier pressure and overnight risk are worse. Use Lay Low if you need to cool off.</div>`:'';
- return `${late}${hot}<div class="section-title">WHAT'S THE MOVE?</div><div class="actions">
- ${btn('📱 Phone','phone',PHONES[player.phone_id].name)}
- ${fmBackend.isOwner?btn('💰 Owner Wallet','ownerWallet',`Tax balance ${money(fmBackend.ownerBank?.balance||0)}`,'good'):''}
- ${btn('Make a Move','moves','Jobs, robberies & heists')}
- ${btn('Street Move','street','Move carried inventory')}
- ${btn('Supplier','supplier','Buy inventory from contacts')}
- ${btn('Black Market','black','Weapons, armor & phone upgrades')}
- ${btn('Crew','crew','Hire crew members')}
- ${btn('City Map','map','Travel around the city')}
- ${btn('Garage','vehicles','Own multiple rides')}
- ${btn('Properties','properties','Own multiple locations')}
- ${btn('Trap Stash','stash','Cash, inventory & weapons')}
- ${btn('Trap Upgrades','upgrades','Security, storage, condition')}
- ${btn('Lay Low','laylow','Reduce heat with time')}
- ${btn('Skills','skills','Natural player progression')}
- ${btn('Objectives','objectives','Current progression goals')}
- ${btn('Achievements','achievements','Badges and milestones')}
- ${btn('Hospital','hospital','Treatment and recovery')}
- ${btn('Status','status','Full player/trap status')}
- ${btn('End Day / Sleep','sleep','Must be at your trap','good')}
- ${btn('Save Game','save','Local + cloud sync')}
- </div>`;
+ const late=player.time>=WARNING_TIME?`<div class="notice warning">${icon('alert')} LATE NIGHT — 2:00 AM is the danger window.</div>`:'';
+ const hot=player.heat>=4?`<div class="notice danger">${icon('heat')} HIGH HEAT — odds, supplier prices and overnight risk are worse.</div>`:'';
+ const ownerTools=fmBackend.isOwner?`<div class="section-title private-title">PRIVATE OWNER TOOLS</div><div class="menu-grid owner-grid">${menuCard(icon('owner'),'Owner Wallet',`Tax balance ${money(fmBackend.ownerBank?.balance||0)}`,'ownerWallet','owner')}${menuCard(icon('dashboard'),'Owner Dashboard','Private live game activity','ownerDashboard','owner')}</div>`:'';
+ return `${late}${hot}<div class="section-title">CITY ACTIONS</div><div class="menu-grid">
+ ${menuCard(icon('phone'),'Phone',PHONES[player.phone_id].name,'phone','phone')}
+ ${menuCard(icon('jobs'),'Make a Move','Jobs, robberies & heists','moves','jobs')}
+ ${menuCard(icon('street'),'Street Move','Move carried inventory','street','street')}
+ ${menuCard(icon('supplier'),'Supplier','Contacts & inventory','supplier','supplier')}
+ ${menuCard(icon('market'),'Black Market','Weapons, armor & phones','black','market')}
+ ${menuCard(icon('crew'),'Crew','Recruit and manage crew','crew','crew')}
+ ${menuCard(icon('map'),'City Map','Travel around the city','map','map')}
+ ${menuCard(icon('garage'),'Garage','Vehicles & active ride','vehicles','garage')}
+ ${menuCard(icon('property'),'Properties','Own multiple locations','properties','property')}
+ ${menuCard(icon('stash'),'Trap Stash','Cash, inventory & weapons','stash','stash')}
+ ${menuCard(icon('upgrade'),'Trap Upgrades','Security, storage, condition','upgrades','upgrade')}
+ ${menuCard(icon('laylow'),'Lay Low','Reduce heat with time','laylow','laylow')}
+ ${menuCard(icon('skills'),'Skills','Natural progression','skills','skills')}
+ ${menuCard(icon('objectives'),'Objectives','Current progression goals','objectives','objectives')}
+ ${menuCard(icon('achievements'),'Achievements','Badges and milestones','achievements','achievements')}
+ ${menuCard(icon('hospital'),'Hospital','Treatment and recovery','hospital','hospital')}
+ ${menuCard(icon('status'),'Status','Full player & trap status','status','status')}
+ ${menuCard(icon('sleep'),'End Day / Sleep','Must be at your trap','sleep','sleep')}
+ ${menuCard(icon('save'),'Save Game','Local + cloud sync','save','save')}
+ </div>${ownerTools}`;
 }
+
 function renderResult(){
  const lines=(payload?.lines||[]).map(x=>`<div class="result-line">${escapeHtml(x)}</div>`).join('');
  return `<div class="card"><div class="result-title">${escapeHtml(payload?.title||'RESULT')}</div><div class="result-lines">${lines}</div><hr>
@@ -397,13 +401,10 @@ function difficulty(m){
  return{key:'black',label:'⚫ BLACK'};
 }
 function renderMoves(){
- const items=Object.entries(MOVES).map(([id,m])=>{const r=requirement(m),chance=successChance(m),d=difficulty(m);
- return `<div class="item job ${d.key}"><div class="item-head"><span>${m.name}</span><span class="difficulty ${d.key}">${d.label}</span></div>
- <div class="item-meta">Success estimate ${chance}% · Payout ${money(m.cash[0])}–${money(m.cash[1])} · Heat +${m.heat}★ · ${m.minutes[0]}–${m.minutes[1]} min
- ${m.weapon_tier?`<br>Weapon Tier ${m.weapon_tier}+ required`:''}${r?`<br><span class="bad-text">LOCKED: ${r}</span>`:''}</div>
- <div style="margin-top:9px">${btn(r?'Locked':'Do Move',`doMove:${id}`,r||LOCATIONS[m.location].name,r?'':'primary')}</div></div>`}).join('');
- return `${back()}<div class="section-title">JOB READINESS</div><div class="muted">🟢 favorable · 🟡 risky · 🔴 dangerous · ⚫ extreme</div><div class="list" style="margin-top:10px">${items}</div>`;
+ const items=Object.entries(MOVES).map(([id,m])=>{const r=requirement(m),chance=successChance(m),d=difficulty(m),crewReq=m.requires_crew||0,wt=m.weapon_tier||0;return `<div class="job-card ${d.key}"><div class="job-banner"><span>${escapeHtml(m.name)}</span><span class="difficulty ${d.key}">${d.label}</span></div><div class="job-metrics"><div><span>SUCCESS</span><strong>${chance}%</strong></div><div><span>PAYOUT</span><strong>${money(m.cash[0])}–${money(m.cash[1])}</strong></div><div><span>TIME</span><strong>${m.minutes[0]}–${m.minutes[1]}m</strong></div><div><span>HEAT</span><strong>+${m.heat}★</strong></div></div><div class="job-reqs"><span>📍 ${escapeHtml(LOCATIONS[m.location].name)}</span><span>${wt?`🔫 Tier ${wt}+`:'🔫 No weapon req.'}</span><span>👥 Crew ${crewReq}</span><span>❤️ ${player.health}/100</span></div>${r?`<div class="locked-banner">LOCKED · ${escapeHtml(r)}</div>`:''}<div class="job-action">${btn(r?'Locked':'Do Move',`doMove:${id}`,r?'Meet requirements first':'Attempt this move',r?'':'primary')}</div></div>`}).join('');
+ return `${back()}<div class="section-title">JOB READINESS</div><div class="legend-row"><span>🟢 Favorable</span><span>🟡 Risky</span><span>🔴 Dangerous</span><span>⚫ Extreme</span></div><div class="job-list">${items}</div>`;
 }
+
 function renderStreet(){
  const av=Object.entries(player.carried_drugs).filter(([,g])=>g>.001);
  if(!av.length)return `${back()}<div class="card">You don't have any inventory on you.</div>`;
@@ -452,22 +453,22 @@ function renderStatus(){
 function renderMarket(){return `${back()}<div class="card"><div class="section-title">MORNING MARKET</div>${Object.entries(DRUGS).map(([id,d])=>{const m=player.market[id],txt=m>=1.18?'HIGH ↑':m<=.9?'LOW ↓':'NORMAL →',cls=m>=1.18?'market-high':m<=.9?'market-low':'';return `<div class="stat"><span>${d.name}</span><strong class="${cls}">${txt}</strong></div>`}).join('')}</div>`}
 function renderPhone(){
  const ph=PHONES[player.phone_id],apps=ph.apps;
- const icon=(name,label,sub,action)=>apps.includes(name)?`<div class="app-icon" data-action="${action}"><strong>${label}</strong><small>${sub}</small></div>`:'';
- return `${back()}<div class="phone-wrap"><div class="phone-shell"><div class="phone-top"><span>${formatTime(player.time)}</span><span>${ph.name}</span><span>▮▮▮</span></div><div class="phone-screen"><div class="phone-title">${ph.name.toUpperCase()}</div>
- <div class="phone-grid">
- ${icon('messages','Messages',`${player.messages.length} stored`,'phoneMessages')}
- ${icon('contacts','Contacts','Suppliers & crew','supplier')}
- ${icon('jobs','Jobs','Available moves','moves')}
- ${icon('market','Market','Morning demand','market')}
- ${icon('map','Map','City navigation','map')}
- ${icon('objectives','Objectives','Progression goals','objectives')}
- ${icon('achievements','Achievements','Badges','achievements')}
- ${icon('alerts','Alerts',player.heat>=3?'Heat warning active':'No major alerts','phoneAlerts')}
- ${icon('leaderboard','Leaderboard','Online rankings','leaderboard')}
- ${icon('properties','Properties',`${player.properties.length} owned`,'properties')}
- ${icon('garage','Garage',`${player.vehicles.length} rides`,'vehicles')}
- </div><hr>${btn('Upgrade Phone','phoneShop',`Current tier ${ph.tier}`,'primary')}</div></div></div>`;
+ const iconApp=(name,emoji,label,sub,action)=>apps.includes(name)?`<button class="phone-app" data-action="${action}"><span class="phone-app-icon">${emoji}</span><strong>${label}</strong><small>${sub}</small></button>`:'';
+ return `${back()}<div class="phone-wrap phone-tier-${ph.tier}"><div class="phone-shell"><div class="phone-notch"></div><div class="phone-top"><span>${formatTime(player.time)}</span><span>${ph.name}</span><span>▮▮▮</span></div><div class="phone-screen"><div class="phone-wallpaper"><div class="phone-city">FEDERAL<br>MOTION</div><div class="phone-date">Day ${player.day} · ${stageInfo().title}</div></div><div class="phone-grid">
+ ${iconApp('messages','💬','Messages',`${player.messages.length} stored`,'phoneMessages')}
+ ${iconApp('contacts','👤','Contacts','Suppliers & crew','supplier')}
+ ${iconApp('jobs','🎯','Jobs','Available moves','moves')}
+ ${iconApp('market','📈','Market','Morning demand','market')}
+ ${iconApp('map','🗺️','Map','City navigation','map')}
+ ${iconApp('objectives','📋','Objectives','Progression goals','objectives')}
+ ${iconApp('achievements','🏆','Achievements','Badges','achievements')}
+ ${iconApp('alerts','🚨','Alerts',player.heat>=3?'Heat warning active':'No major alerts','phoneAlerts')}
+ ${iconApp('leaderboard','🥇','Leaderboard','Online rankings','leaderboard')}
+ ${iconApp('properties','🏠','Properties',`${player.properties.length} owned`,'properties')}
+ ${iconApp('garage','🚘','Garage',`${player.vehicles.length} rides`,'vehicles')}
+ </div><div class="phone-dock">${btn('Upgrade Phone','phoneShop',`Current tier ${ph.tier}`,'primary')}</div></div></div></div>`;
 }
+
 function renderPhoneShop(){
  const items=Object.entries(PHONES).filter(([id])=>id!==player.phone_id).map(([id,p])=>{const q=purchaseQuote(p.price),owned=PHONES[player.phone_id].tier>=p.tier;
  return `<div class="item"><div class="item-head"><span>${p.name}</span><span>Tier ${p.tier}</span></div><div class="item-meta">${p.apps.join(' · ')}<br>${owned?'Already below your current tier':`Price ${money(q.total)} · Tax ${money(q.tax)}`}</div>${owned?'':btn('Buy / Activate',`buyPhone:${id}`,'','primary')}</div>`}).join('');
@@ -501,30 +502,68 @@ function renderHowTo(){return `${btn('← Start','start','','back')}<div class="
  <div class="result-line">Federal Motion is a long-term status, not an ending. Keep playing afterward.</div>
  <div class="result-line">Purchases include the in-game Motion Tax. Cloud saves and online stat syncing are active when CLOUD ONLINE appears.</div>
  </div></div>`}
-function renderPatchNotes(){return `${btn('← Start','start','','back')}<div class="card"><div class="result-title">ALPHA 0.2</div><div class="result-lines">
- <div class="result-line">NEW: Supabase cloud saves, anonymous player IDs and shared Motion Tax.</div>
- <div class="result-line">NEW: Dynamic job readiness colors — 🟢 Green, 🟡 Yellow, 🔴 Red, ⚫ Black.</div>
- <div class="result-line">NEW: Burner-phone interface and four phone tiers.</div>
- <div class="result-line">NEW: Objectives, achievements, titles/stages and natural player skills.</div>
- <div class="result-line">NEW: Lay Low heat-control system.</div>
- <div class="result-line">NEW: Multiple vehicles and properties.</div>
- <div class="result-line">BALANCE: Faster early leveling, slower long-run climb toward Federal Motion.</div>
- <div class="result-line">BALANCE: Every robbery requires a weapon; major jobs require stronger weapon tiers.</div>
- <div class="result-line">BALANCE: High heat hurts success odds, supplier prices and overnight safety instead of simply locking the game.</div>
- </div></div>`}
+function renderPatchNotes(){return `${btn('← Start','start','','back')}<div class="card"><div class="result-title">ALPHA 0.3 — UI UPDATE</div><div class="result-lines"><div class="result-line">NEW: Full HUD redesign with visual health, XP, respect and heat meters.</div><div class="result-line">NEW: Gritty street / trap-phone visual style across the game.</div><div class="result-line">NEW: Redesigned phone screens that visually improve with phone tier.</div><div class="result-line">NEW: Larger visual menu cards and cleaner navigation.</div><div class="result-line">NEW: Rebuilt job cards showing success %, payout, time, heat, weapon tier, crew and location.</div><div class="result-line">NEW: Improved alerts, status presentation and progression visibility.</div><div class="result-line">POLISH: Better spacing, mobile layout, panel styling and feedback states.</div></div></div>`}
+
+
 function renderOwnerWallet(){
  if(!fmBackend.isOwner)return `${back()}<div class="card">Owner access required.</div>`;
  const b=fmBackend.ownerBank||{balance:0,total_tax_collected:0,total_tax_events:0};
- return `${back()}<div class="card"><div class="section-title">OWNER WALLET</div>
- ${stat('Spendable Balance',money(b.balance||0))}
- ${stat('Lifetime Motion Tax',money(b.total_tax_collected||0))}
- ${stat('Tax Events',b.total_tax_events||0)}
- ${stat('Player Cash',money(player.cash_on_person))}
- <hr><div class="muted">Move tax money into your character cash so you can spend it anywhere in the game.</div>
- <label>Withdraw amount</label><input id="ownerWithdrawAmount" type="number" min="1" step="1" value="100">
- <div style="margin-top:10px">${btn('Withdraw To Player Cash','ownerWithdraw','','good')}</div>
+ return `${back()}<div class="section-title private-title">PRIVATE OWNER WALLET</div>
+ <div class="dashboard-grid">
+  <div class="dash-card"><span>SPENDABLE BALANCE</span><strong>${money(b.balance||0)}</strong></div>
+  <div class="dash-card"><span>LIFETIME MOTION TAX</span><strong>${money(b.total_tax_collected||0)}</strong></div>
+  <div class="dash-card"><span>TAX EVENTS</span><strong>${Number(b.total_tax_events||0).toLocaleString()}</strong></div>
+  <div class="dash-card"><span>PLAYER CASH</span><strong>${money(player.cash_on_person)}</strong></div>
+  <div class="dash-card wide">
+   <span>TRANSFER TO PLAYER CASH</span>
+   <div class="muted" style="margin:8px 0">Withdraw Owner Wallet funds into your character cash so the money can be spent normally in-game.</div>
+   <input id="ownerWithdrawAmount" type="number" min="1" step="1" value="100">
+   <div style="margin-top:10px">${btn('Withdraw To Player Cash','ownerWithdraw','','good')}</div>
+  </div>
  </div>`;
 }
+
+function renderOwnerDashboard(){
+ if(!fmBackend.isOwner)return `${back()}<div class="card">Owner access required.</div>`;
+ return `${back()}<div class="section-title private-title">PRIVATE OWNER DASHBOARD</div>
+ <div id="ownerDashboardBox" class="dashboard-grid">
+   <div class="dash-card wide"><span>STATUS</span><strong>Loading live activity…</strong></div>
+ </div>`;
+}
+
+async function loadOwnerDashboard(){
+ if(!fmBackend.isOwner||!fmBackend.client)return;
+ const box=document.getElementById('ownerDashboardBox');
+ if(!box)return;
+
+ const {data,error}=await fmBackend.client.rpc('fm_owner_dashboard');
+ if(error){
+  box.innerHTML=`<div class="dash-card wide"><span>ERROR</span><strong>${escapeHtml(error.message)}</strong></div>`;
+  return;
+ }
+
+ const d=Array.isArray(data)?data[0]:data;
+ if(!d){
+  box.innerHTML='<div class="dash-card wide"><span>STATUS</span><strong>No dashboard data.</strong></div>';
+  return;
+ }
+
+ const recent=(d.recent_players||[]).map(p=>
+  `<div class="activity-row"><strong>${escapeHtml(p.player_name||'Player')}</strong><span>Lv ${p.level||1}</span><small>Last sync: ${escapeHtml(p.last_sync||'Unknown')}</small></div>`
+ ).join('')||'<div class="muted">No recent players.</div>';
+
+ box.innerHTML=`
+   <div class="dash-card"><span>OWNER WALLET</span><strong>${money(d.owner_balance||0)}</strong></div>
+   <div class="dash-card"><span>LIFETIME TAX</span><strong>${money(d.total_tax_collected||0)}</strong></div>
+   <div class="dash-card"><span>TAX EVENTS</span><strong>${Number(d.total_tax_events||0).toLocaleString()}</strong></div>
+   <div class="dash-card"><span>PLAYER PROFILES</span><strong>${Number(d.total_player_profiles||0).toLocaleString()}</strong></div>
+   <div class="dash-card"><span>ACTIVE RECENTLY</span><strong>${Number(d.players_active_recently||0).toLocaleString()}</strong></div>
+   <div class="dash-card"><span>HIGHEST LEVEL</span><strong>${d.highest_level||1}</strong></div>
+   <div class="dash-card"><span>HIGHEST NET WORTH</span><strong>${money(d.highest_net_worth||0)}</strong></div>
+   <div class="dash-card"><span>LATEST CLOUD SAVE</span><strong class="dash-small">${escapeHtml(d.latest_cloud_save||'None')}</strong></div>
+   <div class="dash-card wide"><span>RECENT PLAYER ACTIVITY</span><div class="activity-list">${recent}</div></div>`;
+}
+
 function renderLeaderboard(){return `${back()}<div class="card"><div class="section-title">ONLINE LEADERBOARD</div><div id="leaderboardBox" class="muted">Loading rankings…</div></div>`}
 
 function travelTime(base){const v=VEHICLES[player.active_vehicle]||VEHICLES.bicycle;return Math.max(10,Math.floor(base*v.speed))}
@@ -578,8 +617,8 @@ function handle(action){
  if(action==='deleteSave'){if(confirm('Delete your Federal Motion local save?')){localStorage.removeItem(SAVE_KEY);localStorage.removeItem(LEGACY_SAVE_KEY);player=null;screen='start';render()}return}
  if(action==='start'){screen='start';render();return}
  if(action==='home'){screen='home';payload=null;render();return}
- const direct=['moves','street','supplier','black','weapons','armor','equip','crew','map','stash','upgrades','hospital','status','market','phone','objectives','achievements','skills','laylow','vehicles','properties','howto','patch','leaderboard','ownerWallet'];
- if(direct.includes(action)){screen=action;payload=null;render();if(action==='leaderboard')setTimeout(loadLeaderboard,0);return}
+ const direct=['moves','street','supplier','black','weapons','armor','equip','crew','map','stash','upgrades','hospital','status','market','phone','objectives','achievements','skills','laylow','vehicles','properties','howto','patch','leaderboard','ownerWallet','ownerDashboard'];
+ if(direct.includes(action)){screen=action;payload=null;render();if(action==='leaderboard')setTimeout(loadLeaderboard,0);if(action==='ownerDashboard')setTimeout(loadOwnerDashboard,0);return}
  if(action==='phoneShop'){screen='phoneShop';payload=null;app().innerHTML=header()+renderPhoneShop()+`<div class="footer-note">Local + cloud save active.</div>`;return}
  if(action==='phoneMessages'){app().innerHTML=header()+renderMessages()+`<div class="footer-note">Local + cloud save active.</div>`;return}
  if(action==='phoneAlerts'){app().innerHTML=header()+renderAlerts()+`<div class="footer-note">Local + cloud save active.</div>`;return}
