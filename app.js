@@ -367,7 +367,7 @@ function header(){
  return `<div class="hero compact"><div class="hero-kicker">${escapeHtml(s.name)} · ${escapeHtml(s.title)}</div><div class="logo">FEDERAL MOTION</div><div class="sublogo">${escapeHtml(fmBackend.gameVersion)} · ${backendStatusText()}</div></div>
  <div class="hud card"><div class="hud-top"><div><strong>${escapeHtml(player.name)}</strong><small>${escapeHtml(s.title)}</small></div><div class="hud-clock">${formatTime(player.time)}<small>DAY ${player.day}</small></div></div>
  <div class="hud-grid">${meter(`${icon('health')} Health`,player.health,100,'health')}${meter(`${icon('xp')} XP`,player.xp-currentLevelXp(),nextLevelXp()-currentLevelXp(),'xp')}${meter(`${icon('respect')} Respect`,player.respect,Math.max(20,s.respect+25),'respect')}${meter(`${icon('heat')} Heat`,player.heat,5,'heat')}</div>
- <div class="hud-strip"><div><span>${icon('cash')} CASH</span><strong>${money(player.cash_on_person)}</strong></div><div><span>📍 LOCATION</span><strong>${escapeHtml(LOCATIONS[player.location]?.name||player.location)}</strong></div><button class="hud-quick" data-action="quickWeapon"><span>${icon('weapon')} WEAPON</span><strong>${escapeHtml(weaponName())}</strong><small>Tap to switch</small></button><button class="hud-quick" data-action="quickVehicle"><span>${icon('ride')} RIDE</span><strong>${escapeHtml(vehicleName())}</strong><small>Tap to switch</small></button></div></div>`;
+ <div class="hud-strip"><div><span>${icon('cash')} CASH</span><strong>${money(player.cash_on_person)}</strong></div><div><span>📍 LOCATION</span><strong>${escapeHtml(LOCATIONS[player.location]?.name||player.location)}</strong></div><div><span>${icon('weapon')} WEAPON</span><strong>${escapeHtml(weaponName())}</strong></div><div><span>${icon('ride')} RIDE</span><strong>${escapeHtml(vehicleName())}</strong></div></div></div>`;
 }
 
 function stat(k,v){return `<div class="stat"><span>${k}</span><strong>${escapeHtml(v)}</strong></div>`}
@@ -386,58 +386,6 @@ function render(){
  if(screen==='supplierShop')html+=renderSupplierShop(payload);else html+=(map[screen]||renderHome)();
  app().innerHTML=html+`<div class="footer-note">${fmBackend.ready?'Local save + cloud sync active.':'Local save active. Cloud will sync when connected.'}</div>`;
 }
-
-function renderQuickWeaponPicker(){
- const owned=player.weapon_inventory||[];
- const items=[
-  `<button class="quick-pick ${!player.equipped_weapon?'active':''}" data-action="quickWeaponEquip:none">
-    <div><span class="quick-icon">✋</span><strong>Unarmed</strong></div>
-    <small>${!player.equipped_weapon?'CURRENT':'Carry no weapon'}</small>
-   </button>`,
-  ...owned.map((w,i)=>{
-   const info=WEAPONS[w.id]||{name:'Unknown Weapon',tier:'?'};
-   const active=player.equipped_weapon===w.id;
-   return `<button class="quick-pick ${active?'active':''}" data-action="quickWeaponEquip:${i}">
-     <div><span class="quick-icon">${icon('weapon')}</span><strong>${escapeHtml(info.name)}</strong></div>
-     <small>${active?'CURRENT':`Tier ${info.tier||'?'} · Condition ${w.condition??100}%`}</small>
-    </button>`;
-  })
- ].join('');
- return `<div class="quick-overlay">
-  <div class="quick-panel">
-   <div class="quick-head"><div><span>QUICK LOADOUT</span><strong>Choose Weapon</strong></div>${btn('✕','quickClose','','quick-close')}</div>
-   <div class="quick-list">${items}</div>
-  </div>
- </div>`;
-}
-
-function renderQuickVehiclePicker(){
- const owned=player.vehicles||[];
- const items=owned.map(id=>{
-  const v=VEHICLES[id]||{name:'Unknown Ride',reliability:'?'};
-  const active=player.active_vehicle===id;
-  return `<button class="quick-pick ${active?'active':''}" data-action="quickVehicleEquip:${id}">
-    <div><span class="quick-icon">${icon('ride')}</span><strong>${escapeHtml(v.name)}</strong></div>
-    <small>${active?'CURRENT':`Reliability ${v.reliability??'?'}% · Storage ${v.storage??'?'}`}</small>
-   </button>`;
- }).join('');
- return `<div class="quick-overlay">
-  <div class="quick-panel">
-   <div class="quick-head"><div><span>QUICK GARAGE</span><strong>Choose Ride</strong></div>${btn('✕','quickClose','','quick-close')}</div>
-   <div class="quick-list">${items||'<div class="muted">No vehicles owned.</div>'}</div>
-  </div>
- </div>`;
-}
-
-function openQuickPicker(type){
- const overlay=type==='weapon'?renderQuickWeaponPicker():renderQuickVehiclePicker();
- app().insertAdjacentHTML('beforeend',overlay);
-}
-
-function closeQuickPicker(){
- document.querySelector('.quick-overlay')?.remove();
-}
-
 function renderStart(){
  return `<div class="card"><div class="section-title">START</div><div class="actions">
  ${hasSave()?btn('Continue Game','continue','','primary'):''}${btn('New Game','new','','primary')}
@@ -717,30 +665,6 @@ function handle(action){
    if(!r.ok){result('OWNER WALLET',[r.error||'Withdrawal failed.']);return}
    result('OWNER WITHDRAWAL',[`Owner Wallet: -${money(amount)}`,`Player Cash: +${money(amount)}`,`Owner Wallet Remaining: ${money(r.new_balance)}`]);
   });
-  return;
- }
- if(action==='quickWeapon'){openQuickPicker('weapon');return}
- if(action==='quickVehicle'){openQuickPicker('vehicle');return}
- if(action==='quickClose'){closeQuickPicker();return}
- if(action.startsWith('quickWeaponEquip:')){
-  const choice=action.split(':')[1];
-  if(choice==='none'){
-   player.equipped_weapon=null;
-  }else{
-   const i=Number(choice);
-   if(Number.isInteger(i)&&player.weapon_inventory[i])player.equipped_weapon=player.weapon_inventory[i].id;
-  }
-  saveGame();
-  closeQuickPicker();
-  render();
-  return;
- }
- if(action.startsWith('quickVehicleEquip:')){
-  const id=action.slice('quickVehicleEquip:'.length);
-  if(player.vehicles.includes(id))player.active_vehicle=id;
-  saveGame();
-  closeQuickPicker();
-  render();
   return;
  }
  if(action==='sleep'){endDay();return}
