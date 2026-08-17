@@ -57,3 +57,8 @@ ALPHA 0.5 — CREWS & TERRITORY
 - Hold rewards unlock at 2, 4 and 6 real-world days.
 - Signature product rewards and visible rare weapon-drop odds.
 - Territory battle cooldowns keep zone control from being spammed.
+
+PUBLIC CHANGELOG SYSTEM
+- In-game Patch Notes now keep a versioned history instead of one hard-coded release.
+- Latest public changes appear first while older public notes remain visible.
+- Current changelog covers Alpha 0.3 UI, Alpha 0.3 balance/consequences, Alpha 0.4 City Life, Alpha 0.4 Prep & Risk, crew balance fixes, and Alpha 0.5 Crews & Territory.
