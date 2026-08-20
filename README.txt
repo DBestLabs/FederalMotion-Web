@@ -1,104 +1,62 @@
-FEDERAL MOTION — ALPHA 0.7 RESTORED WEB BUILD
+FEDERAL MOTION — ALPHA 0.7
+==========================
 
-THIS BUILD USES YOUR ALPHA 0.5 EMPLOYMENT/TERRITORY/CITY-LIFE BUILD AS THE BASE.
-It does NOT replace the game with the stripped-down 0.7 prototype.
+Federal Motion is an early-access crime/life progression game from DBest Labs. Build your motion from the bottom, manage your time and Heat, earn money through legit work or risky city opportunities, upgrade your gear and rides, build a crew, and fight for territory.
 
-RESTORED / KEPT
-- Alpha 0.3 visual HUD and quick weapon/ride switching
-- Alpha 0.4 City Life, reserve cash, bills/upkeep, properties, vehicles, profile, risk clarity
-- Alpha 0.5 player crews, territory control, hold rewards, crew bank, leaderboard
-- Alpha 0.5 Employment: 8-9 hour shifts, weekly pay, Work Rep, write-ups, firing, promotions, overtime/events
-- Phone tiers, skills, achievements, objectives, Lay Low, stash, suppliers, black market, hospital, cloud save
-- Motion Tax, owner wallet/dashboard, owner-loss and upkeep/bills backend queues
+ALPHA 0.7 — WHAT'S NEW
+----------------------
+• New-player walkthrough explains the core game systems before entering the city.
+• Returning players receive a one-time What's New alert when an update adds new systems.
+• Legit job schedules now line up with the 8:00 AM start of the game day.
+• Legit base pay, promotion pay, milestone bonuses and attendance rewards were increased.
+• Completing legit shifts can help lower Heat.
+• Quick Moves include clean side work, street opportunities and fictional scam/fraud plays.
+• Repeating the same Quick Move during one day lowers its success odds and each opportunity has a daily limit.
+• Activity History records recent Quick Move results.
 
-ALPHA 0.7 ADDED
-- Quick Moves / Hustle Board with 10 small opportunities
-- 3-use daily cap per Quick Move
-- Repeating the same Quick Move lowers its success odds
-- Clean/risky Quick Move split
-- Quick Move activity history
-- 30-minute late clock-in grace window
-- Full patch-note entry documenting this restore update
+HOW THE DAY WORKS
+-----------------
+• Each day starts at 8:00 AM.
+• Actions consume in-game time.
+• Keep an eye on the HUD clock and late-night danger window.
+• Return to your trap before ending the day.
 
-DEPLOY
-1. Replace GitHub Pages index.html, app.js, styles.css with these files.
-2. Do NOT delete your Supabase tables.
-3. The existing SAVE_KEY remains federal_motion_web_save_v2 and legacy v1 migration remains enabled.
-4. Commit all three files and hard refresh the published site.
+EMPLOYMENT
+----------
+• Apply for fictional legit jobs through Employment.
+• All scheduled shifts begin at or after 8:00 AM.
+• Clock in during the allowed window and report to work unarmed.
+• Completed shifts build Work Rep and promotion progress.
+• Pay is deposited weekly.
+• Raises and milestone bonuses unlock as more shifts are completed.
+• Consistent attendance can earn extra pay.
+• Missed shifts can create write-ups and repeated attendance problems can get you fired.
+• Clean employment can help cool Heat.
 
-DATABASE SQL INCLUDED FOR REFERENCE
-Only run a SQL migration if that specific migration was never run before. Do not blindly rerun destructive/duplicate migrations.
+QUICK MOVES
+-----------
+Quick Moves are shorter opportunities around the city. They range from delivery, moving, detailing, warehouse and courier work to higher-risk fictional street and fraud/scam opportunities. Riskier plays can pay more but bring lower success odds and more Heat.
 
---- PREVIOUS README HISTORY ---
-FEDERAL MOTION — ALPHA 0.3 UI UPDATE
+HEAT & RISK
+-----------
+Heat runs from 0–5 stars. Higher Heat makes the city harder and can hurt your odds. Clean work and Lay Low can help cool things down. Failed risky moves may cost cash, health, gear or lead to arrest depending on the situation.
 
-PUBLIC PLAYER FEATURES
-- Full visual HUD redesign
-- Health / XP / Respect / Heat meters
-- Gritty street + trap-phone UI style
-- Redesigned burner-to-premium phone interface
-- Larger visual menu cards
-- Rebuilt job cards with success %, payout, danger color, time, heat, weapon tier, crew and location
-- Improved alerts, mobile spacing, panel styling and progression visibility
-- Existing Alpha 0.2 gameplay and cloud systems retained
+GEAR, RIDES & CITY PROGRESSION
+------------------------------
+• Weapons are required for robberies, and larger moves demand stronger preparation.
+• Vehicles can be purchased, equipped and used for travel or job requirements.
+• Upgrade phones to unlock more apps and city tools.
+• Build skills, earn achievements and complete objectives as your character progresses.
+• Properties can provide additional benefits and income while also creating expenses.
 
-DEPLOYMENT
-1. Run Alpha03-Database-Update.sql in Supabase.
-2. Test index.html locally.
-3. Upload index.html, app.js, styles.css and README.txt to FederalMotion-Web.
+CREWS & TERRITORY
+-----------------
+Players can create or join crews, challenge territory, hold zones and earn gameplay bonuses and rewards. Crew and territory systems become more important as your character grows.
 
-SECURITY
-Never place a Supabase secret/service-role key in these public files.
+SAVING
+------
+Federal Motion uses local browser saving and supports cloud syncing when CLOUD ONLINE is shown. Existing compatible saves are migrated forward when possible.
 
-ALPHA 0.3 BALANCE UPDATE
-- Slower early-game cash growth.
-- Repeated moves become less profitable and more dangerous.
-- High heat has stronger consequences.
-- Jail and hospital penalties increased.
-
-ALPHA 0.4 — CITY LIFE UPDATE
-- Added a protected Cash Reserve.
-- Added daily bills/upkeep for owned lifestyle assets.
-- Added passive property income.
-- Added unpaid bills that carry forward.
-- Added random end-of-day city events.
-- Added a full Player Profile with career records and economy stats.
-- Existing Alpha 0.3 balance changes remain active.
-
-ALPHA 0.4 — PREP & RISK CLARITY PATCH
-- Over-preparation bonuses: extra crew and stronger weapon tiers can improve success odds.
-- Success chance is still capped at 95%, so no move is guaranteed.
-- Job cards now explain why the displayed odds are what they are.
-- Dangerous moves now show a confirmation warning before the player commits.
-- Warning screens show carried cash/gear and other possible consequences.
-- Rare failures at very high success odds are labeled clearly.
-
-ALPHA 0.4 — CREW BALANCE FIX
-- Crew payout sharing has been rebalanced so bringing extra help does not consume nearly the entire score.
-- Extra preparation still improves success odds.
-
-ALPHA 0.5 — CREWS & TERRITORY
-- Create or join online player crews (10-member cap).
-- Public and invite-only crew options.
-- Crew ranks: Boss, Underboss, Lieutenant, Member.
-- Shared crew bank and crew reputation.
-- Six NPC-controlled city territories.
-- Territory battles build influence until a crew takes control.
-- Controlled zones grant gameplay bonuses.
-- Former NPC gangs build retake pressure and can challenge control later.
-- Hold rewards unlock at 2, 4 and 6 real-world days.
-- Signature product rewards and visible rare weapon-drop odds.
-- Territory battle cooldowns keep zone control from being spammed.
-
-PUBLIC CHANGELOG SYSTEM
-- In-game Patch Notes now keep a versioned history instead of one hard-coded release.
-- Latest public changes appear first while older public notes remain visible.
-- Current changelog covers Alpha 0.3 UI, Alpha 0.3 balance/consequences, Alpha 0.4 City Life, Alpha 0.4 Prep & Risk, crew balance fixes, and Alpha 0.5 Crews & Territory.
-
-ALPHA 0.5 — EMPLOYMENT & LEGIT HUSTLES
-- Scheduled legit jobs with humorous fictional employers.
-- 8–9 hour shifts paying roughly $40–$50 at entry level.
-- Weekly pending-pay system.
-- No equipped weapons while clocked in.
-- Raises, bonuses and promotions at 20/40/60/100 completed shifts.
-- Work Rep, write-ups, firing, workplace events and employment history.
+ALPHA SOFTWARE
+--------------
+Federal Motion is still in active development. Features, balance, UI and progression can change between alpha versions. If something breaks after an update, report what happened and what you were doing immediately before the problem.
