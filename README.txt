@@ -1,3 +1,11 @@
+FEDERAL MOTION — ALPHA 0.8.1 FLOW FIX
+
+PLAYER UPDATE
+- Result screens now keep track of where you came from.
+- Continue returns you to the same section instead of forcing you back to the main menu.
+- A separate Main Menu button is available when you actually want to leave the section.
+- This fixes repeated actions such as Lay Low, scam plays, employment actions, upgrades, purchases, and other section-based gameplay.
+
 FEDERAL MOTION — ALPHA 0.8 CITY PRESSURE UPDATE
 
 Federal Motion is an evolving browser-based crime/life progression game. Start at the bottom, manage your time and Heat, build money and reputation, and choose how you move through the city.
@@ -21,3 +29,9 @@ NOTES
 - Save data remains compatible with prior browser saves.
 - The scam/fraud career is fictionalized gameplay and does not provide real-world instructions.
 - This README contains player-facing information only.
+
+
+CITY TAX
+- Certain in-game purchases include a small City Tax / transaction fee.
+- The fee is shown before or with the purchase total so players know what they are paying.
+- It exists for game-economy balance and is not a real-world charge.

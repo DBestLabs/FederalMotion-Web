@@ -11,7 +11,7 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KlgKi5KFxRqrMbGzZIVVSQ_-JM9OlON';
 const DAY_START=8*60, WARNING_TIME=24*60, DAY_END=26*60, MAX_HEAT=5, MAX_HEALTH=100;
 const DEFAULT_MOTION_TAX_RATE=.05;
 
-let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
+let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8.2',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
 let player=null, screen='start', payload=null;
 
 const DRUGS={
@@ -512,6 +512,7 @@ function makeUuid(){
 }
 function motionTaxFor(base){return Math.max(0,Math.floor(Math.max(0,base)*fmBackend.taxRate))}
 function purchaseQuote(base){const tax=motionTaxFor(base);return{base,tax,total:base+tax}}
+function cityTaxNote(){return `<div class="notice"><strong>City Tax</strong><br><span class="muted">A small in-game transaction fee added to certain purchases to help balance the city economy.</span></div>`}
 function queueMotionTax(tax){if(!tax||tax<=0)return;let q=[];try{q=JSON.parse(localStorage.getItem(TAX_QUEUE_KEY)||'[]')}catch{}q.push({event_id:makeUuid(),tax_amount:Math.floor(tax)});localStorage.setItem(TAX_QUEUE_KEY,JSON.stringify(q));flushTaxQueue()}
 async function flushTaxQueue(){
  if(!fmBackend.ready||!fmBackend.client)return;let q=[];try{q=JSON.parse(localStorage.getItem(TAX_QUEUE_KEY)||'[]')}catch{}if(!q.length)return;
@@ -793,7 +794,7 @@ function renderResult(){
  const lines=(payload?.lines||[]).map(x=>`<div class="result-line">${escapeHtml(x)}</div>`).join('');
  return `<div class="card"><div class="result-title">${escapeHtml(payload?.title||'RESULT')}</div><div class="result-lines">${lines}</div><hr>
  <div class="status-grid">${stat('Cash',money(player.cash_on_person))}${stat('XP',player.xp)}${stat('Respect',player.respect)}${stat('Heat',stars(player.heat))}${stat('Health',`${player.health}/100`)}${stat('Time',formatTime(player.time))}</div>
- <div style="margin-top:12px">${btn('Continue','home','','primary')}</div></div>`;
+ <div style="margin-top:12px">${btn('Continue','resultContinue','','primary')}${btn('Main Menu','home','','back')}</div></div>`;
 }
 function difficulty(m){
  const c=successChance(m),power=combatPower(),enemy=m.enemy?(m.enemy[0]+m.enemy[1])/2:0;
@@ -825,13 +826,13 @@ function supplierProducts(name){return name==='Smoke'?['weed','shrooms']:name===
 function supplierUnitPrice(id){const base=Math.max(1,Math.floor(DRUGS[id].base_value*.65));return Math.ceil(base*(1+(player.heat>=3?player.heat*.03:0)))}
 function renderSupplierShop(name){
  const products=supplierProducts(name);
- return `${btn('← Suppliers','supplier','','back')}<div class="card"><div class="section-title">${name.toUpperCase()}</div><div class="muted">Cash: ${money(player.cash_on_person)} · Motion Tax ${Math.round(fmBackend.taxRate*100)}%</div>
+ return `${btn('← Suppliers','supplier','','back')}${cityTaxNote()}<div class="card"><div class="section-title">${name.toUpperCase()}</div><div class="muted">Cash: ${money(player.cash_on_person)} · City Tax ${Math.round(fmBackend.taxRate*100)}%</div>
  <label>Product</label><select id="buyDrug">${products.map(id=>{const p=supplierUnitPrice(id);return `<option value="${id}" data-price="${p}">${DRUGS[id].name} — ${money(p)}/game gram</option>`}).join('')}</select>
  <label>Amount (game grams)</label><input id="buyGrams" type="number" min="0.1" step="0.1" value="3.5"><div style="margin-top:10px">${btn('Buy','buyDrugGo','','primary')}</div></div>`;
 }
 function renderBlack(){return `${back()}<div class="section-title">BLACK MARKET</div><div class="actions">${btn('Weapons','weapons','Tier 1–5')}${btn('Armor','armor','Light → Elite')}${btn('Equip Gear','equip','Choose active gear')}${btn('Phone Shop','phoneShop','Upgrade your phone')}</div>`}
-function renderWeapons(){return `${btn('← Black Market','black','','back')}<div class="list">${Object.entries(WEAPONS).map(([id,w])=>{const q=purchaseQuote(w.price);return `<div class="item"><div class="item-head"><span>${w.name}</span><span>${money(q.total)}</span></div><div class="item-meta">Tier ${w.tier} · Power ${w.power} · Condition ${w.condition}% · Tax ${money(q.tax)}</div>${btn('Buy',`buyWeapon:${id}`,'','primary')}</div>`}).join('')}</div>`}
-function renderArmor(){return `${btn('← Black Market','black','','back')}<div class="list">${Object.entries(ARMOR).map(([id,a])=>{const q=purchaseQuote(a.price);return `<div class="item"><div class="item-head"><span>${a.name}</span><span>${money(q.total)}</span></div><div class="item-meta">Tier ${a.tier} · Defense ${a.defense} · Tax ${money(q.tax)}</div>${btn('Buy',`buyArmor:${id}`,'','primary')}</div>`}).join('')}</div>`}
+function renderWeapons(){return `${btn('← Black Market','black','','back')}${cityTaxNote()}<div class="list">${Object.entries(WEAPONS).map(([id,w])=>{const q=purchaseQuote(w.price);return `<div class="item"><div class="item-head"><span>${w.name}</span><span>${money(q.total)}</span></div><div class="item-meta">Tier ${w.tier} · Power ${w.power} · Condition ${w.condition}% · City Tax ${money(q.tax)}</div>${btn('Buy',`buyWeapon:${id}`,'','primary')}</div>`}).join('')}</div>`}
+function renderArmor(){return `${btn('← Black Market','black','','back')}${cityTaxNote()}<div class="list">${Object.entries(ARMOR).map(([id,a])=>{const q=purchaseQuote(a.price);return `<div class="item"><div class="item-head"><span>${a.name}</span><span>${money(q.total)}</span></div><div class="item-meta">Tier ${a.tier} · Defense ${a.defense} · City Tax ${money(q.tax)}</div>${btn('Buy',`buyArmor:${id}`,'','primary')}</div>`}).join('')}</div>`}
 function renderEquip(){
  const ws=player.weapon_inventory.map((x,i)=>`<option value="${i}">${WEAPONS[x.id].name} · Tier ${WEAPONS[x.id].tier} · ${x.condition}%</option>`).join(''),as=player.armor_inventory.map((id,i)=>`<option value="${i}">${ARMOR[id].name}</option>`).join('');
  return `${btn('← Black Market','black','','back')}<div class="card"><div class="section-title">EQUIP GEAR</div><label>Weapon</label><select id="equipWeapon"><option value="">Unarmed</option>${ws}</select><label>Armor</label><select id="equipArmor"><option value="">None</option>${as}</select><div style="margin-top:10px">${btn('Equip','equipGo','','primary')}</div></div>`;
@@ -846,7 +847,7 @@ function renderStash(){
  <div class="card"><div class="section-title">ON PERSON</div>${drugList(player.carried_drugs)}<div class="section-title">TRAP STASH</div>${drugList(player.trap.drug_stash)}<hr><label>Drug</label><select id="stashDrug">${Object.keys(DRUGS).map(id=>`<option value="${id}">${DRUGS[id].name}</option>`).join('')}</select><label>Amount</label><input id="stashGrams" type="number" min="0.1" step="0.1" value="3.5"><div class="row" style="margin-top:8px">${btn('Store','storeDrug')}${btn('Take','takeDrug')}</div></div>
  <div class="card"><div class="section-title">WEAPONS</div><div class="muted">On person: ${player.weapon_inventory.length} · Stored: ${player.trap.weapons.length}</div><div class="row" style="margin-top:8px">${btn('Store All Carried Weapons','storeWeapons')}</div>${player.trap.weapons.length?`<label>Stored weapon</label><select id="takeWeapon">${takeWeapons}</select>${btn('Take Weapon','takeWeaponGo')}`:''}</div>`;
 }
-function renderUpgrades(){if(player.location!=='trap')return `${back()}<div class="card">You need to be at your trap.</div>`;const opts=[['security',500*(player.trap.security+1)],['storage',400*(player.trap.storage+1)],['condition',300*(player.trap.condition+1)]];return `${back()}<div class="list">${opts.map(([k,c])=>{const q=purchaseQuote(c);return `<div class="item"><div class="item-head"><span>${k[0].toUpperCase()+k.slice(1)} ${player.trap[k]}/5</span><span>${money(q.total)}</span></div><div class="item-meta">Base ${money(c)} · Tax ${money(q.tax)}</div>${btn(player.trap[k]>=5?'MAXED':'Upgrade',`upgrade:${k}`,player.trap[k]>=5?'':'Uses 60 minutes',player.trap[k]>=5?'':'primary')}</div>`}).join('')}</div>`}
+function renderUpgrades(){if(player.location!=='trap')return `${back()}<div class="card">You need to be at your trap.</div>`;const opts=[['security',500*(player.trap.security+1)],['storage',400*(player.trap.storage+1)],['condition',300*(player.trap.condition+1)]];return `${back()}<div class="list">${opts.map(([k,c])=>{const q=purchaseQuote(c);return `<div class="item"><div class="item-head"><span>${k[0].toUpperCase()+k.slice(1)} ${player.trap[k]}/5</span><span>${money(q.total)}</span></div><div class="item-meta">Base ${money(c)} · City Tax ${money(q.tax)}</div>${btn(player.trap[k]>=5?'MAXED':'Upgrade',`upgrade:${k}`,player.trap[k]>=5?'':'Uses 60 minutes',player.trap[k]>=5?'':'primary')}</div>`}).join('')}</div>`}
 function renderHospital(){const miss=100-player.health,cost=Math.max(50,miss*8);return `${back()}<div class="card"><div class="section-title">COUNTY HOSPITAL</div>${stat('Health',`${player.health}/100`)}${stat('Full Treatment',money(cost))}<div style="margin-top:10px">${btn(player.health>=100?'Already Full Health':'Get Treatment','treat',player.health>=100?'':'Takes 120 minutes',player.health>=100?'':'primary')}</div></div>`}
 function renderStatus(){
  const s=stageInfo();
@@ -882,7 +883,7 @@ function renderDailyWeekly(){ensureObjectives();const daily=player.objective_sta
 
 function renderPhoneShop(){
  const items=Object.entries(PHONES).filter(([id])=>id!==player.phone_id).map(([id,p])=>{const q=purchaseQuote(p.price),owned=PHONES[player.phone_id].tier>=p.tier;
- return `<div class="item"><div class="item-head"><span>${p.name}</span><span>Tier ${p.tier}</span></div><div class="item-meta">${p.apps.join(' · ')}<br>${owned?'Already below your current tier':`Price ${money(q.total)} · Tax ${money(q.tax)}`}</div>${owned?'':btn('Buy / Activate',`buyPhone:${id}`,'','primary')}</div>`}).join('');
+ return `<div class="item"><div class="item-head"><span>${p.name}</span><span>Tier ${p.tier}</span></div><div class="item-meta">${p.apps.join(' · ')}<br>${owned?'Already below your current tier':`Price ${money(q.total)} · City Tax ${money(q.tax)}`}</div>${owned?'':btn('Buy / Activate',`buyPhone:${id}`,'','primary')}</div>`}).join('');
  return `${btn('← Phone','phone','','back')}<div class="section-title">PHONE SHOP</div><div class="list">${items}</div>`;
 }
 function renderObjectives(){const s=stageInfo();return `${back()}<div class="card"><div class="item-head"><span>${s.name}</span><span>${s.title}</span></div><div class="muted">Federal Motion is a long-term status, not an ending. The game continues after you reach it.</div></div><div class="list">${objectives().map(([t,d])=>`<div class="item objective ${d?'done':''}"><div class="item-head"><span>${d?'✓':'○'} ${escapeHtml(t)}</span><span>${d?'DONE':'ACTIVE'}</span></div></div>`).join('')}</div>`}
@@ -898,11 +899,11 @@ function renderLayLow(){
 }
 function renderVehicles(){
  return `${back()}<div class="card"><div class="section-title">YOUR GARAGE</div>${player.vehicles.map(id=>`<div class="item"><div class="item-head"><span>${VEHICLES[id].name}</span><span>${player.active_vehicle===id?'ACTIVE':'OWNED'}</span></div><div class="item-meta">Speed ${Math.round((1-VEHICLES[id].speed)*100)} · Storage ${VEHICLES[id].storage} · Condition ${Math.round(player.vehicle_condition?.[id]??VEHICLES[id].reliability)}%</div>${(player.vehicle_condition?.[id]??100)<95?btn('Repair',`repairVehicle:${id}`,`Estimated ${money(Math.max(20,Math.round((100-(player.vehicle_condition?.[id]??100))*8)))}`):''}${player.active_vehicle===id?'':btn('Set Active',`activeVehicle:${id}`)}</div>`).join('')}</div>
- <div class="section-title">VEHICLE MARKET</div><div class="list">${Object.entries(VEHICLES).filter(([id])=>!player.vehicles.includes(id)).map(([id,v])=>{const q=purchaseQuote(v.price);return `<div class="item"><div class="item-head"><span>${v.name}</span><span>${money(q.total)}</span></div><div class="item-meta">Speed ${Math.round((1-v.speed)*100)} · Storage ${v.storage} · Attention ${v.attention} · Reliability ${v.reliability}% · Tax ${money(q.tax)}</div>${btn('Buy Vehicle',`buyVehicle:${id}`,'','primary')}</div>`}).join('')}</div>`;
+ <div class="section-title">VEHICLE MARKET</div><div class="list">${Object.entries(VEHICLES).filter(([id])=>!player.vehicles.includes(id)).map(([id,v])=>{const q=purchaseQuote(v.price);return `<div class="item"><div class="item-head"><span>${v.name}</span><span>${money(q.total)}</span></div><div class="item-meta">Speed ${Math.round((1-v.speed)*100)} · Storage ${v.storage} · Attention ${v.attention} · Reliability ${v.reliability}% · City Tax ${money(q.tax)}</div>${btn('Buy Vehicle',`buyVehicle:${id}`,'','primary')}</div>`}).join('')}</div>`;
 }
 function renderProperties(){
  return `${back()}<div class="card"><div class="section-title">OWNED LOCATIONS</div>${player.properties.map(id=>`<div class="item"><div class="item-head"><span>${PROPERTIES[id].name}</span><span>${PROPERTIES[id].type}</span></div><div class="item-meta">Storage +${PROPERTIES[id].storage} · Security +${PROPERTIES[id].security} · Status +${PROPERTIES[id].status} · Daily income ${money(PROPERTY_ECONOMY[id]?.income?.[0]||0)}–${money(PROPERTY_ECONOMY[id]?.income?.[1]||0)} · Upkeep ${money(PROPERTY_ECONOMY[id]?.upkeep||0)}</div></div>`).join('')}</div>
- <div class="section-title">PROPERTY MARKET</div><div class="list">${Object.entries(PROPERTIES).filter(([id])=>!player.properties.includes(id)).map(([id,p])=>{const q=purchaseQuote(p.price);return `<div class="item"><div class="item-head"><span>${p.name}</span><span>${money(q.total)}</span></div><div class="item-meta">${p.type} · Storage +${p.storage} · Security +${p.security} · Status +${p.status} · Income ${money(PROPERTY_ECONOMY[id]?.income?.[0]||0)}–${money(PROPERTY_ECONOMY[id]?.income?.[1]||0)}/day · Upkeep ${money(PROPERTY_ECONOMY[id]?.upkeep||0)}/day · Tax ${money(q.tax)}</div>${btn('Buy Property',`buyProperty:${id}`,'','primary')}</div>`}).join('')}</div>`;
+ <div class="section-title">PROPERTY MARKET</div><div class="list">${Object.entries(PROPERTIES).filter(([id])=>!player.properties.includes(id)).map(([id,p])=>{const q=purchaseQuote(p.price);return `<div class="item"><div class="item-head"><span>${p.name}</span><span>${money(q.total)}</span></div><div class="item-meta">${p.type} · Storage +${p.storage} · Security +${p.security} · Status +${p.status} · Income ${money(PROPERTY_ECONOMY[id]?.income?.[0]||0)}–${money(PROPERTY_ECONOMY[id]?.income?.[1]||0)}/day · Upkeep ${money(PROPERTY_ECONOMY[id]?.upkeep||0)}/day · City Tax ${money(q.tax)}</div>${btn('Buy Property',`buyProperty:${id}`,'','primary')}</div>`}).join('')}</div>`;
 }
 
 
@@ -1047,10 +1048,10 @@ function renderTutorial(){
 }
 function renderWhatsNew(){
  const og=player.og_reward_eligible&&!player.og_reward_claimed?`<div class="card og-card"><div class="hero-kicker">MESSAGE FROM THE OWNER</div><h2>YOU SURVIVED THE EARLY BUILDS 😂</h2><div class="tutorial-copy">You made it through the ugly builds, broken buttons, questionable balance and whatever the hell Alpha was doing back then. Appreciate you being here through the first waves of Federal Motion. $10,000 is waiting for you. Enjoy it. Spend wisely. Or don’t. I already know how y’all play.</div>${btn('CLAIM $10,000 OG BONUS','claimOgReward','','good')}</div>`:'';
- return `<div class="card tutorial-card"><div class="hero-kicker">NEW IN ALPHA 0.8</div><h2>CITY PRESSURE UPDATE</h2><div class="result-lines"><div class="result-line">🚔 Heat now escalates into traffic stops, searches, warrants, surveillance, raids and arrests. 5★ never blocks a move.</div><div class="result-line">🪪 Driver and carry licenses now affect police encounters.</div><div class="result-line">💻 Scam Career is now a progression lane with equipment, reputation and higher-tier fictional plays.</div><div class="result-line">📱 Phone Alerts track police pressure, work, city events and important changes.</div><div class="result-line">🎯 Daily + weekly objectives now pay claimable rewards.</div><div class="result-line">🚗 Vehicle reliability/repair and deeper property benefits are part of city progression.</div></div><div class="actions">${btn('SHOW WALKTHROUGH','whatsNewTutorial','','back')}${btn('ENTER CITY','whatsNewDone','','primary')}</div></div>${og}`;
+ return `<div class="card tutorial-card"><div class="hero-kicker">NEW IN ALPHA 0.8.1</div><h2>FLOW FIX</h2><div class="result-lines"><div class="result-line">🚔 Heat now escalates into traffic stops, searches, warrants, surveillance, raids and arrests. 5★ never blocks a move.</div><div class="result-line">🪪 Driver and carry licenses now affect police encounters.</div><div class="result-line">💻 Scam Career is now a progression lane with equipment, reputation and higher-tier fictional plays.</div><div class="result-line">📱 Phone Alerts track police pressure, work, city events and important changes.</div><div class="result-line">🎯 Daily + weekly objectives now pay claimable rewards.</div><div class="result-line">🚗 Vehicle reliability/repair and deeper property benefits are part of city progression.</div></div><div class="actions">${btn('SHOW WALKTHROUGH','whatsNewTutorial','','back')}${btn('ENTER CITY','whatsNewDone','','primary')}</div></div>${og}`;
 }
 const PATCH_NOTES_HISTORY=[
- {version:'Alpha 0.8',title:'CITY PRESSURE UPDATE',notes:['Escalating police pressure: stops, searches, warrants, raids and arrests','Driver and carry licenses','Scam Career equipment + reputation progression','Phone alerts','Daily and weekly objectives','Vehicle reliability and property utility','One-time OG appreciation reward for returning players']},
+ {version:'Alpha 0.8.1',title:'FLOW FIX',notes:['Escalating police pressure: stops, searches, warrants, raids and arrests','Driver and carry licenses','Scam Career equipment + reputation progression','Phone alerts','Daily and weekly objectives','Vehicle reliability and property utility','One-time OG appreciation reward for returning players']},
  {
   version:'Alpha 0.7',
   title:'CITY SYSTEMS + TUTORIAL UPDATE',
@@ -1063,7 +1064,7 @@ const PATCH_NOTES_HISTORY=[
    'NEW: Same Quick Move can be used up to 3 times per day; repeats reduce success odds.',
    'NEW: Activity History records recent Quick Move results.',
    'RESTORED: Alpha 0.5 Employment, crews, territory, City Life, phone tiers, vehicles, properties, skills, achievements and owner systems remain intact.',
-   'RESTORED: Motion Tax, owner-loss collection, upkeep/bills collection and cloud sync remain intact.',
+   'RESTORED: economy, cloud sync, upkeep/bills, and progression systems remain intact.',
    'SAVE: Existing v2 and legacy v1 browser saves continue to migrate forward.'
   ]
  },
@@ -1423,7 +1424,14 @@ function riskItemsForMove(m){
 }
 
 function requirement(m){if(player.level<(m.requires_level||1))return `Requires Level ${m.requires_level}`;if(m.requires_weapon&&!player.equipped_weapon)return 'Weapon required';if(m.weapon_tier&&currentWeaponTier()<m.weapon_tier)return `Requires Weapon Tier ${m.weapon_tier}+`;if(player.crew.length<(m.requires_crew||0))return `Requires ${m.requires_crew} crew member(s)`;return''}
-function result(title,lines){checkAchievements();saveGame();screen='result';payload={title,lines};render()}
+function result(title,lines,returnTo=null){
+ const origin=(returnTo || (screen && screen!=='result' ? screen : 'home'));
+ checkAchievements();
+ saveGame();
+ screen='result';
+ payload={title,lines,returnTo:origin};
+ render();
+}
 
 function performMove(id){
  const m=MOVES[id],r=requirement(m);if(r){result('LOCKED',[r]);return}
@@ -1691,6 +1699,13 @@ function handle(action){
  if(action==='deleteSave'){if(confirm('Delete your Federal Motion local save?')){localStorage.removeItem(SAVE_KEY);localStorage.removeItem(LEGACY_SAVE_KEY);player=null;screen='start';render()}return}
  if(action==='start'){screen='start';render();return}
  if(action==='home'){screen='home';payload=null;render();return}
+ if(action==='resultContinue'){
+  const dest=payload?.returnTo||'home';
+  screen=dest;
+  payload=null;
+  render();
+  return;
+ }
  if(action==='tutorialPrev'){player.tutorial.step=Math.max(0,(player.tutorial.step||0)-1);saveGame();screen='tutorial';render();return}
  if(action==='tutorialNext'){if((player.tutorial.step||0)>=TUTORIAL_STEPS.length-1){player.tutorial.completed=true;player.tutorial.seen_version='Alpha 0.8';saveGame();screen='home';render();return}player.tutorial.step=(player.tutorial.step||0)+1;saveGame();screen='tutorial';render();return}
  if(action==='whatsNewTutorial'){player.tutorial.step=0;screen='tutorial';render();return}
@@ -1859,18 +1874,18 @@ function handle(action){
   return
  }
  if(action.startsWith('supplier:')){const n=action.split(':')[1];if((n==='Doc'&&player.respect<3)||(n==='Ghost'&&player.respect<8)){result('NOT YET',[n==='Doc'?'Doc: Come back when people know your name.':'Ghost isn’t interested yet.']);return}travelTo('supplier');if(screen==='result')return;screen='supplierShop';payload=n;render();return}
- if(action==='buyDrugGo'){const id=$('#buyDrug').value,g=parseFloat($('#buyGrams').value||0),p=supplierUnitPrice(id),cost=Math.floor(g*p),name=payload;if(g<=0)return;const charge=taxedPurchase(cost);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)} including ${money(charge.tax)} Motion Tax.`]);return}player.carried_drugs[id]+=g;player.supplier_trust[name]++;player.daily.supplier_buys=(player.daily.supplier_buys||0)+1;addSkillXP('charisma',4);advanceTime(30);if(screen==='result')return;result('DEAL COMPLETE',[`${DRUGS[id].name}: +${g.toFixed(1)}g`,`Base: -${money(charge.base)}`,`Motion Tax: -${money(charge.tax)}`,`Total: -${money(charge.total)}`]);return}
+ if(action==='buyDrugGo'){const id=$('#buyDrug').value,g=parseFloat($('#buyGrams').value||0),p=supplierUnitPrice(id),cost=Math.floor(g*p),name=payload;if(g<=0)return;const charge=taxedPurchase(cost);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)} including ${money(charge.tax)} City Tax.`]);return}player.carried_drugs[id]+=g;player.supplier_trust[name]++;player.daily.supplier_buys=(player.daily.supplier_buys||0)+1;addSkillXP('charisma',4);advanceTime(30);if(screen==='result')return;result('DEAL COMPLETE',[`${DRUGS[id].name}: +${g.toFixed(1)}g`,`Base: -${money(charge.base)}`,`City Tax: -${money(charge.tax)}`,`Total: -${money(charge.total)}`]);return}
  if(action==='streetGo'){const id=$('#streetDrug').value,g=Math.min(parseFloat($('#streetGrams').value||0),player.carried_drugs[id]);if(g<=0)return;const d=DRUGS[id],zoneStreet=territoryBonusPercent('street'),pay=Math.floor(g*d.base_value*player.market[id]*(.68+Math.random()*.20)*(1+zoneStreet/100)),chance=Math.max(28,92-d.risk*4-heatPenalty()+skillLevel('street'));advanceTime(randInt(35,65));if(screen==='result')return;player.stats.moves++;addSkillXP('street',12);if(randInt(1,100)<=chance){player.carried_drugs[id]-=g;player.cash_on_person+=pay;player.stats.total_earned+=pay;const xp=Math.max(10,Math.floor(g*2));player.xp+=xp;if(randInt(1,100)<=d.risk*8)player.heat=clamp(player.heat+1,0,5);player.stats.successful_moves++;player.daily.successes++;const lvl=updateLevel();result('MOVE SUCCESSFUL',[`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(lvl?[lvl]:[])])}else{player.stats.failed_moves++;player.daily.failures++;player.heat=clamp(player.heat+1,0,5);result('MOVE WENT BAD',['The opportunity fell apart.','No inventory was lost.','Heat: +1★'])}return}
- if(action.startsWith('buyWeapon:')){const id=action.split(':')[1],w=WEAPONS[id],c=taxedPurchase(w.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including Motion Tax.`]);return}player.weapon_inventory.push({id,condition:w.condition,upgrades:0});advanceTime(30);result('PURCHASE COMPLETE',[`Purchased ${w.name}.`,`Base: -${money(c.base)}`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
- if(action.startsWith('buyArmor:')){const id=action.split(':')[1],a=ARMOR[id],c=taxedPurchase(a.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including Motion Tax.`]);return}player.armor_inventory.push(id);advanceTime(25);result('PURCHASE COMPLETE',[`Purchased ${a.name}.`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
- if(action.startsWith('buyPhone:')){const id=action.split(':')[1],p=PHONES[id];if(PHONES[player.phone_id].tier>=p.tier)return;const c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.phone_id=id;addSkillXP('business',10);result('PHONE UPGRADED',[`New phone: ${p.name}`,`Motion Tax: -${money(c.tax)}`,`Apps unlocked: ${p.apps.join(', ')}`]);return}
+ if(action.startsWith('buyWeapon:')){const id=action.split(':')[1],w=WEAPONS[id],c=taxedPurchase(w.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including City Tax.`]);return}player.weapon_inventory.push({id,condition:w.condition,upgrades:0});advanceTime(30);result('PURCHASE COMPLETE',[`Purchased ${w.name}.`,`Base: -${money(c.base)}`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
+ if(action.startsWith('buyArmor:')){const id=action.split(':')[1],a=ARMOR[id],c=taxedPurchase(a.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including City Tax.`]);return}player.armor_inventory.push(id);advanceTime(25);result('PURCHASE COMPLETE',[`Purchased ${a.name}.`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
+ if(action.startsWith('buyPhone:')){const id=action.split(':')[1],p=PHONES[id];if(PHONES[player.phone_id].tier>=p.tier)return;const c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.phone_id=id;addSkillXP('business',10);result('PHONE UPGRADED',[`New phone: ${p.name}`,`City Tax: -${money(c.tax)}`,`Apps unlocked: ${p.apps.join(', ')}`]);return}
  if(action==='equipGo'){const wi=$('#equipWeapon').value,ai=$('#equipArmor').value;player.equipped_weapon=wi===''?null:player.weapon_inventory[Number(wi)].id;player.equipped_armor=ai===''?null:player.armor_inventory[Number(ai)];result('GEAR EQUIPPED',[`Weapon: ${weaponName()}`,`Armor: ${armorName()}`]);return}
- if(action.startsWith('hire:')){const id=action.split(':')[1],c=CREW[id];travelTo('crew_spot');if(screen==='result')return;const charge=taxedPurchase(c.price);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)}.`]);return}player.crew.push(id);addSkillXP('charisma',15);advanceTime(45);result('CREW UPDATED',[`${c.name} joined as ${c.role}.`,`Motion Tax: -${money(charge.tax)}`]);return}
+ if(action.startsWith('hire:')){const id=action.split(':')[1],c=CREW[id];travelTo('crew_spot');if(screen==='result')return;const charge=taxedPurchase(c.price);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)}.`]);return}player.crew.push(id);addSkillXP('charisma',15);advanceTime(45);result('CREW UPDATED',[`${c.name} joined as ${c.role}.`,`City Tax: -${money(charge.tax)}`]);return}
  if(action.startsWith('travel:')){const id=action.split(':')[1];if(id===player.location)return;travelTo(id);if(screen==='result')return;result('TRAVEL COMPLETE',[`Arrived at ${LOCATIONS[id].name}.`,`Time: ${formatTime(player.time)}`]);return}
  if(action.startsWith('activeVehicle:')){const id=action.split(':')[1];if(player.vehicles.includes(id)){player.active_vehicle=id;saveGame();screen='vehicles';render()}return}
  if(action.startsWith('repairVehicle:')){const id=action.split(':')[1],cond=player.vehicle_condition?.[id]??100,cost=Math.max(20,Math.round((100-cond)*8));if(player.cash_on_person<cost){result('GARAGE',[`Need ${money(cost)}.`]);return}player.cash_on_person-=cost;player.vehicle_condition[id]=100;saveGame();result('VEHICLE REPAIRED',[`${VEHICLES[id].name} condition restored to 100%.`,`Cost: -${money(cost)}`]);return}
- if(action.startsWith('buyVehicle:')){const id=action.split(':')[1],v=VEHICLES[id],c=taxedPurchase(v.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.vehicles.push(id);player.vehicle_condition[id]=v.reliability;player.active_vehicle=id;result('VEHICLE PURCHASED',[`${v.name} added to your garage.`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
- if(action.startsWith('buyProperty:')){const id=action.split(':')[1],p=PROPERTIES[id],c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.properties.push(id);result('PROPERTY PURCHASED',[`${p.name} is now yours.`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
+ if(action.startsWith('buyVehicle:')){const id=action.split(':')[1],v=VEHICLES[id],c=taxedPurchase(v.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.vehicles.push(id);player.vehicle_condition[id]=v.reliability;player.active_vehicle=id;result('VEHICLE PURCHASED',[`${v.name} added to your garage.`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
+ if(action.startsWith('buyProperty:')){const id=action.split(':')[1],p=PROPERTIES[id],c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.properties.push(id);result('PROPERTY PURCHASED',[`${p.name} is now yours.`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action==='bankDeposit'||action==='bankWithdraw'){
   if(player.location!=='trap'){result('CASH RESERVE',['Return to your trap to move reserve cash.']);return}
   let a=Math.max(0,Math.floor(Number($('#bankAmount')?.value||0)));
@@ -1901,7 +1916,7 @@ function handle(action){
  if(action==='storeDrug'||action==='takeDrug'){const id=$('#stashDrug').value;let g=Math.max(0,Number($('#stashGrams').value||0)),src=action==='storeDrug'?player.carried_drugs:player.trap.drug_stash,dst=action==='storeDrug'?player.trap.drug_stash:player.carried_drugs;g=Math.min(g,src[id]);src[id]-=g;dst[id]+=g;saveGame();screen='stash';render();return}
  if(action==='storeWeapons'){player.trap.weapons.push(...player.weapon_inventory);player.weapon_inventory=[];player.equipped_weapon=null;saveGame();screen='stash';render();return}
  if(action==='takeWeaponGo'){const i=Number($('#takeWeapon').value);if(Number.isFinite(i)&&player.trap.weapons[i])player.weapon_inventory.push(player.trap.weapons.splice(i,1)[0]);saveGame();screen='stash';render();return}
- if(action.startsWith('upgrade:')){const k=action.split(':')[1];if(player.trap[k]>=5)return;const base={security:500*(player.trap.security+1),storage:400*(player.trap.storage+1),condition:300*(player.trap.condition+1)}[k],c=taxedPurchase(base);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.trap[k]++;advanceTime(60);result('TRAP UPGRADED',[`${k[0].toUpperCase()+k.slice(1)} upgraded to ${player.trap[k]}/5.`,`Motion Tax: -${money(c.tax)}`]);return}
+ if(action.startsWith('upgrade:')){const k=action.split(':')[1];if(player.trap[k]>=5)return;const base={security:500*(player.trap.security+1),storage:400*(player.trap.storage+1),condition:300*(player.trap.condition+1)}[k],c=taxedPurchase(base);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.trap[k]++;advanceTime(60);result('TRAP UPGRADED',[`${k[0].toUpperCase()+k.slice(1)} upgraded to ${player.trap[k]}/5.`,`City Tax: -${money(c.tax)}`]);return}
  if(action==='treat'){if(player.health>=100)return;travelTo('hospital');if(screen==='result')return;const c=Math.max(50,(100-player.health)*8);if(player.cash_on_person<c){result('NOT ENOUGH CASH',[`Treatment costs ${money(c)}.`]);return}player.cash_on_person-=c;player.health=100;advanceTime(120);addSkillXP('endurance',6);result('TREATMENT COMPLETE',['Health restored to 100/100.',`Cash: -${money(c)}`]);return}
  if(action.startsWith('laylow:')){if(player.location!=='trap')return;const mode=action.split(':')[1];if(player.heat<=0){result('ALREADY COLD',['Heat is already at zero.']);return}
   if(mode==='4'){advanceTime(240);const ok=Math.random()<.6;if(ok)player.heat=Math.max(0,player.heat-1);player.trap.attention=Math.max(0,player.trap.attention-8);result('LAY LOW',[ok?'Heat: -1★':'Heat did not drop this time.','Trap attention cooled down.']);return}
