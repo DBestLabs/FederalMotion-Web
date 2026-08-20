@@ -1,3 +1,15 @@
+FEDERAL MOTION — ALPHA 0.8.7 HEAT RISK UPDATE
+
+PLAYER UPDATE
+- Drug street moves no longer add Heat automatically every time.
+- Heat chance now scales by product tier, amount moved, and same-day retry pressure.
+- Weed is the quietest lane; cocaine and meth carry more attention risk; heroin carries the highest attention risk.
+- Large/bulk moves can raise both the chance and possible Heat gain.
+- Failed deals can still draw attention, while police/seizure outcomes remain especially hot.
+- Scam Career Heat is now chance-based by scam tier instead of guaranteed on every play.
+- Lay Low can now be selected from anywhere in the city. The game fast-travels the player back to Your Trap first and charges normal travel time.
+- Existing saves remain compatible.
+
 FEDERAL MOTION — ALPHA 0.8.6 DEAL RISK + DIALOGUE UPDATE
 
 PLAYER UPDATE

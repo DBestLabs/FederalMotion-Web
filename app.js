@@ -11,7 +11,7 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KlgKi5KFxRqrMbGzZIVVSQ_-JM9OlON';
 const DAY_START=8*60, WARNING_TIME=24*60, DAY_END=26*60, MAX_HEAT=5, MAX_HEALTH=100;
 const DEFAULT_MOTION_TAX_RATE=.05;
 
-let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8.6',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
+let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8.7',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
 let player=null, screen='start', payload=null;
 let actionOriginScreen='home';
 
@@ -237,6 +237,42 @@ const formatTime=m=>{const x=((m%(24*60))+(24*60))%(24*60),h=Math.floor(x/60),mi
 const escapeHtml=s=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 
 const pick=arr=>arr[randInt(0,arr.length-1)];
+const DRUG_HEAT_RISK={
+ weed:{chance:12,max:1},
+ shrooms:{chance:18,max:1},
+ pills:{chance:22,max:1},
+ lean:{chance:25,max:1},
+ cocaine:{chance:38,max:2},
+ meth:{chance:48,max:2},
+ heroin:{chance:62,max:2}
+};
+function drugHeatRoll(id,grams,retries=0,failed=false,forcePolice=false){
+ const p=DRUG_HEAT_RISK[id]||{chance:20,max:1};
+ let qty=0;
+ if(grams<7)qty=-8;
+ else if(grams<28)qty=-4;
+ else if(grams<112)qty=0;
+ else if(grams<500)qty=7;
+ else if(grams<2000)qty=16;
+ else qty=27;
+ let chance=clamp(p.chance+qty+Math.min(15,retries*5)+(failed?8:0),3,95);
+ if(forcePolice)chance=100;
+ if(randInt(1,100)>chance)return {gain:0,chance};
+ let gain=1;
+ const highTier=['cocaine','meth','heroin'].includes(id);
+ const big=grams>=500;
+ if((p.max||1)>=2 && highTier && big && randInt(1,100)<=Math.min(65,18+Math.floor(grams/100)))gain=2;
+ return {gain:Math.min(p.max||1,gain),chance};
+}
+function scamHeatRoll(job,failed=false){
+ const tier=clamp(Number(job?.tier||1),1,4);
+ const base={1:25,2:40,3:55,4:70}[tier];
+ const chance=clamp(base+(failed?15:0)+(player.warrants||0)*4,10,92);
+ if(randInt(1,100)>chance)return {gain:0,chance};
+ const max=Math.max(1,Math.min(2,Number(job?.heat||1)));
+ const gain=(max>=2 && tier>=3 && randInt(1,100)<=35)?2:1;
+ return {gain,chance};
+}
 const STREET_DIALOGUE={
  success:[
   'Buyer came correct. Quick exchange and everybody kept moving.',
@@ -940,7 +976,7 @@ function renderPhoneAlerts(){
  return `${back()}<div class="card"><div class="section-title">CITY PRESSURE</div><div class="status-grid">${stat('Heat',stars(player.heat))}${stat('Warrants',player.warrants||0)}${stat('Pressure',`${Math.round(policePressure())}%`)}${stat('Trap Attention',`${player.trap.attention}%`)}</div><div class="muted">5★ never blocks a move. It means you are choosing to operate while police pressure is at its worst.</div></div><div class="section-title">ALERTS</div><div class="list">${rows||'<div class="card muted">No alerts yet.</div>'}</div>`;
 }
 function renderLicenses(){return `${back()}<div class="card"><div class="section-title">CITY LICENSES</div><div class="muted">Licenses do not stop illegal choices. They change what happens during police encounters.</div></div><div class="list">${Object.entries(LICENSES).map(([id,x])=>`<div class="item"><div class="item-head"><span>${escapeHtml(x.name)}</span><span>${player.licenses[id]?'ACTIVE':money(x.price)}</span></div><div class="item-meta">${escapeHtml(x.desc)}</div>${player.licenses[id]?'':btn('Get License',`buyLicense:${id}`,'','primary')}</div>`).join('')}</div>`}
-function renderScamCareer(){const gear=Object.entries(SCAM_GEAR).map(([id,g])=>`<div class="item"><div class="item-head"><span>${escapeHtml(g.name)}</span><span>${hasScamGear(id)?'OWNED':money(g.price)}</span></div><div class="item-meta">Career tool · Tier ${g.tier}</div>${hasScamGear(id)?'':btn('Buy Tool',`buyScamGear:${id}`,'','primary')}</div>`).join('');const jobs=Object.entries(FRAUD_JOBS).map(([id,j])=>{const missing=j.req.filter(x=>!hasScamGear(x));const chance=clamp(j.success+(player.scam?.rep||0)*.35-player.heat*4,20,94);return `<div class="job-card ${j.tier>=4?'black':j.tier>=3?'red':j.tier>=2?'yellow':'green'}"><div class="job-banner"><span>${escapeHtml(j.name)}</span><span>TIER ${j.tier}</span></div><div class="job-metrics"><div><span>SUCCESS</span><strong>${Math.round(chance)}%</strong></div><div><span>PAYOUT</span><strong>${money(j.cash[0])}–${money(j.cash[1])}</strong></div><div><span>HEAT</span><strong>+${j.heat}★</strong></div><div><span>TIME</span><strong>${j.minutes[0]}–${j.minutes[1]}m</strong></div></div><div class="job-reqs"><span>${missing.length?'Missing: '+missing.map(x=>SCAM_GEAR[x].name).join(', '):'Equipment ready'}</span></div><div class="job-action">${btn('Run Play',`fraudJob:${id}`,missing.length?'Get required gear first':'Abstract fictional game roll',missing.length?'':'primary')}</div></div>`}).join('');return `${back()}<div class="card"><div class="hero-kicker">SCAM CAREER</div><h2>Digital & Paper Motion</h2><div class="muted">Build equipment, reputation and access. Jobs are fictionalized game abstractions—requirements, odds, payout, Heat and consequences.</div><div class="status-grid">${stat('Scam Rep',player.scam?.rep||0)}${stat('Career Jobs',player.scam?.jobs||0)}${stat('Tools',(player.scam?.gear||[]).length)}${stat('Heat',stars(player.heat))}</div></div><div class="section-title">CAREER JOBS</div><div class="job-list">${jobs}</div><div class="section-title">BLACK-MARKET TOOLS</div><div class="list">${gear}</div>`}
+function renderScamCareer(){const gear=Object.entries(SCAM_GEAR).map(([id,g])=>`<div class="item"><div class="item-head"><span>${escapeHtml(g.name)}</span><span>${hasScamGear(id)?'OWNED':money(g.price)}</span></div><div class="item-meta">Career tool · Tier ${g.tier}</div>${hasScamGear(id)?'':btn('Buy Tool',`buyScamGear:${id}`,'','primary')}</div>`).join('');const jobs=Object.entries(FRAUD_JOBS).map(([id,j])=>{const missing=j.req.filter(x=>!hasScamGear(x));const chance=clamp(j.success+(player.scam?.rep||0)*.35-player.heat*4,20,94);return `<div class="job-card ${j.tier>=4?'black':j.tier>=3?'red':j.tier>=2?'yellow':'green'}"><div class="job-banner"><span>${escapeHtml(j.name)}</span><span>TIER ${j.tier}</span></div><div class="job-metrics"><div><span>SUCCESS</span><strong>${Math.round(chance)}%</strong></div><div><span>PAYOUT</span><strong>${money(j.cash[0])}–${money(j.cash[1])}</strong></div><div><span>HEAT RISK</span><strong>${({1:25,2:40,3:55,4:70}[j.tier]||25)}% chance</strong></div><div><span>TIME</span><strong>${j.minutes[0]}–${j.minutes[1]}m</strong></div></div><div class="job-reqs"><span>${missing.length?'Missing: '+missing.map(x=>SCAM_GEAR[x].name).join(', '):'Equipment ready'}</span></div><div class="job-action">${btn('Run Play',`fraudJob:${id}`,missing.length?'Get required gear first':'Abstract fictional game roll',missing.length?'':'primary')}</div></div>`}).join('');return `${back()}<div class="card"><div class="hero-kicker">SCAM CAREER</div><h2>Digital & Paper Motion</h2><div class="muted">Build equipment, reputation and access. Jobs are fictionalized game abstractions—requirements, odds, payout, Heat and consequences.</div><div class="status-grid">${stat('Scam Rep',player.scam?.rep||0)}${stat('Career Jobs',player.scam?.jobs||0)}${stat('Tools',(player.scam?.gear||[]).length)}${stat('Heat',stars(player.heat))}</div></div><div class="section-title">CAREER JOBS</div><div class="job-list">${jobs}</div><div class="section-title">BLACK-MARKET TOOLS</div><div class="list">${gear}</div>`}
 function renderDailyWeekly(){ensureObjectives();const daily=player.objective_state.daily.map(i=>{const o=DAILY_OBJECTIVE_POOL[i],done=o[1](player),key=`daily_${player.day}_${i}`,claimed=(player.objective_claims||[]).includes(key);return `<div class="item objective ${done?'done':''}"><div class="item-head"><span>${done?'✓':'○'} ${escapeHtml(o[0])}</span><span>${claimed?'CLAIMED':done?'READY':'ACTIVE'}</span></div>${done&&!claimed?btn('Claim $150 + 40 XP',`claimObj:daily:${i}`,'','good'):''}</div>`}).join('');const weekly=player.objective_state.weekly.map(i=>{const o=WEEKLY_OBJECTIVE_POOL[i],done=o[1](player),key=`weekly_${player.weekly.week}_${i}`,claimed=(player.objective_claims||[]).includes(key);return `<div class="item objective ${done?'done':''}"><div class="item-head"><span>${done?'✓':'○'} ${escapeHtml(o[0])}</span><span>${claimed?'CLAIMED':done?'READY':'ACTIVE'}</span></div>${done&&!claimed?btn('Claim $750 + 180 XP',`claimObj:weekly:${i}`,'','good'):''}</div>`}).join('');return `${back()}<div class="section-title">DAILY OBJECTIVES · DAY ${player.day}</div><div class="list">${daily}</div><div class="section-title">WEEKLY OBJECTIVES · WEEK ${player.weekly.week}</div><div class="list">${weekly}</div><div class="section-title">PROGRESSION</div>${renderObjectives().replace(back(),'')}`}
 
 function renderPhoneShop(){
@@ -952,8 +988,8 @@ function renderObjectives(){const s=stageInfo();return `${back()}<div class="car
 function renderAchievements(){return `${back()}<div class="section-title">ACHIEVEMENTS</div><div class="list">${Object.entries(ACHIEVEMENTS).map(([id,a])=>{const got=player.achievements.includes(id);return `<div class="item achievement ${got?'':'locked'}"><div class="item-head"><span>${got?'🏆':'🔒'} ${a.name}</span><span class="rarity-${a.rarity}">${a.rarity}</span></div><div class="item-meta">${a.desc}</div></div>`}).join('')}</div>`}
 function renderSkills(){const names={combat:'Combat',street:'Street Smarts',charisma:'Charisma',driving:'Driving',business:'Business',endurance:'Endurance'};return `${back()}<div class="card"><div class="muted">Skills improve naturally from related actions.</div></div><div class="list">${Object.entries(names).map(([k,n])=>{const s=player.skills[k];return `<div class="item"><div class="item-head"><span>${n}</span><span>Lv ${s.level}</span></div><div class="item-meta">${s.xp} skill XP</div><div class="progress"><div style="width:${(s.xp%150)/1.5}%"></div></div></div>`}).join('')}</div>`}
 function renderLayLow(){
- if(player.location!=='trap')return `${back()}<div class="card">Go back to your trap before laying low.</div>`;
- return `${back()}<div class="card"><div class="section-title">LAY LOW</div>${stat('Current Heat',stars(player.heat))}<div class="muted">Cooling off costs time. High heat stays playable, but it hurts odds and increases pressure.</div></div><div class="actions">
+ const travelNote=player.location!=='trap'?`<div class="notice">You are at ${escapeHtml(LOCATIONS[player.location]?.name||'another location')}. Lay Low will fast-travel you back to Your Trap first and charge the normal travel time.</div>`:'';
+ return `${back()}<div class="card"><div class="section-title">LAY LOW</div>${stat('Current Heat',stars(player.heat))}<div class="muted">Cooling off costs time. High heat stays playable, but it hurts odds and increases pressure.</div>${travelNote}</div><div class="actions">
  ${btn('Keep Quiet — 4 Hours','laylow:4','60% chance to lose 1★')}
  ${btn('Stay In — 8 Hours','laylow:8','Guaranteed -1★','good')}
  ${btn('Disappear For The Day','laylow:day','Lose up to 2★, day advances','good')}
@@ -1920,7 +1956,7 @@ function handle(action){
  if(action==='claimOgReward'){if(player.og_reward_eligible&&!player.og_reward_claimed){player.cash_on_person+=10000;player.stats.total_earned+=10000;player.og_reward_claimed=true;addActivity('Claimed Alpha 0.8 OG appreciation bonus');saveGame();result('OG BONUS CLAIMED',['From the owner: appreciate you riding through the early waves. 😂','Cash: +$10,000','Enjoy it. Spend wisely. Or don’t.'])}return}
  if(action.startsWith('buyLicense:')){const id=action.split(':')[1],x=LICENSES[id];if(!x||player.licenses[id])return;if(player.cash_on_person<x.price){result('LICENSE OFFICE',[`Need ${money(x.price)}.`]);return}player.cash_on_person-=x.price;player.licenses[id]=true;saveGame();result('LICENSE ISSUED',[x.name,`Cost: -${money(x.price)}`],'licenses');return}
  if(action.startsWith('buyScamGear:')){const id=action.split(':')[1],g=SCAM_GEAR[id];if(!g||hasScamGear(id))return;const c=taxedPurchase(g.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`],'scamCareer');return}player.scam.gear.push(id);saveGame();result('TOOL ACQUIRED',[g.name,`Total: -${money(c.total)}`],'scamCareer');return}
- if(action.startsWith('fraudJob:')){const id=action.split(':')[1],j=FRAUD_JOBS[id];if(!j)return;const missing=j.req.filter(x=>!hasScamGear(x));if(missing.length){result('EQUIPMENT REQUIRED',[...missing.map(x=>SCAM_GEAR[x].name)],'scamCareer');return}const chance=clamp(j.success+(player.scam.rep||0)*.35-player.heat*4,20,94);advanceTime(randInt(...j.minutes));if(screen==='result')return;player.scam.jobs++;player.daily.fraud_jobs=(player.daily.fraud_jobs||0)+1;player.weekly.fraud_jobs=(player.weekly.fraud_jobs||0)+1;if(randInt(1,100)<=chance){const pay=randInt(...j.cash);player.cash_on_person+=pay;player.stats.total_earned+=pay;player.daily.earned=(player.daily.earned||0)+pay;player.weekly.earned=(player.weekly.earned||0)+pay;player.scam.rep+=randInt(2,5);player.heat=clamp(player.heat+j.heat,0,5);const police=policeCheck('Scam career');saveGame();result('PLAY HIT',[`${j.name}: +${money(pay)}`,`Scam Rep: ${player.scam.rep}`,`Heat: +${j.heat}★`,...police],'scamCareer')}else{player.heat=clamp(player.heat+j.heat,0,5);const police=policeCheck('Failed scam career job');saveGame();result('PLAY BURNED',[`${j.name} failed.`,`Heat: +${j.heat}★`,...police],'scamCareer')}return}
+ if(action.startsWith('fraudJob:')){const id=action.split(':')[1],j=FRAUD_JOBS[id];if(!j)return;const missing=j.req.filter(x=>!hasScamGear(x));if(missing.length){result('EQUIPMENT REQUIRED',[...missing.map(x=>SCAM_GEAR[x].name)],'scamCareer');return}const chance=clamp(j.success+(player.scam.rep||0)*.35-player.heat*4,20,94);advanceTime(randInt(...j.minutes));if(screen==='result')return;player.scam.jobs++;player.daily.fraud_jobs=(player.daily.fraud_jobs||0)+1;player.weekly.fraud_jobs=(player.weekly.fraud_jobs||0)+1;if(randInt(1,100)<=chance){const pay=randInt(...j.cash);player.cash_on_person+=pay;player.stats.total_earned+=pay;player.daily.earned=(player.daily.earned||0)+pay;player.weekly.earned=(player.weekly.earned||0)+pay;player.scam.rep+=randInt(2,5);const hr=scamHeatRoll(j,false);player.heat=clamp(player.heat+hr.gain,0,5);const police=hr.gain?policeCheck('Scam career'):[];saveGame();result('PLAY HIT',[`${j.name}: +${money(pay)}`,`Scam Rep: ${player.scam.rep}`,hr.gain?`Heat: +${hr.gain}★`:`Heat: +0★ · clean play (${hr.chance}% risk)`,...police],'scamCareer')}else{const hr=scamHeatRoll(j,true);player.heat=clamp(player.heat+hr.gain,0,5);const police=hr.gain?policeCheck('Failed scam career job'):[];saveGame();result('PLAY BURNED',[`${j.name} failed.`,hr.gain?`Heat: +${hr.gain}★`:`Heat: +0★ · no immediate police attention (${hr.chance}% risk)`,...police],'scamCareer')}return}
  if(action.startsWith('claimObj:')){const [,kind,idx]=action.split(':');claimObjective(kind,Number(idx));return}
  if(action==='sleep'){endDay();return}
  if(action.startsWith('doMove:')){
@@ -1958,9 +1994,9 @@ function handle(action){
     player.daily.street_retry[id]=0;
     player.carried_drugs[id]-=g;player.cash_on_person+=pay;player.stats.total_earned+=pay;
     const xp=Math.min(1800,Math.max(15,Math.floor(45*Math.sqrt(g))));player.xp+=xp;
-    const bulkHeat=g>=2000?2:g>=500?1:0;const riskHeat=(randInt(1,100)<=d.risk*10?1:0);const heatGain=Math.min(3,bulkHeat+riskHeat);
+    const hr=drugHeatRoll(id,g,retryCount,false,false);const heatGain=hr.gain;
     player.heat=clamp(player.heat+heatGain,0,5);player.stats.successful_moves++;player.daily.successes++;
-    const lvl=updateLevel();result('MOVE SUCCESSFUL',[pick(STREET_DIALOGUE.success),`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(heatGain?[`Heat: +${heatGain}★`]:[]),...(lvl?[lvl]:[])],'street');
+    const lvl=updateLevel();result('MOVE SUCCESSFUL',[pick(STREET_DIALOGUE.success),`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,heatGain?`Heat: +${heatGain}★`:`Heat: +0★ · clean move (${hr.chance}% attention risk)`,...(lvl?[lvl]:[])],'street');
   }else{
     player.stats.failed_moves++;player.daily.failures++;player.daily.street_retry[id]=retryCount+1;
     const danger=clamp(d.risk*7+retryCount*12+player.heat*5+(g>=1000?10:0),10,85),roll=randInt(1,100);
@@ -1969,24 +2005,25 @@ function handle(action){
     else if(roll<=Math.max(10,danger*.28))kind='police';
     else if(roll<=Math.max(18,danger*.48))kind='setup';
     else if(roll<=Math.max(32,danger*.72))kind='partial';
-    let heatGain=g>=1000?2:1,lost=0,cashLost=0;const lines=[];
+    let heatGain=0,lost=0,cashLost=0;const lines=[];
     if(kind==='soft')lines.push(pick(STREET_DIALOGUE.soft),'Inventory kept: 100%');
     else if(kind==='partial'){
       lost=Math.min(player.carried_drugs[id],Math.max(.1,g*(randInt(10,28)/100)));player.carried_drugs[id]-=lost;
       lines.push(pick(STREET_DIALOGUE.partial),`Product lost: ${lost.toFixed(1)}g ${d.name}`);
     }else if(kind==='setup'){
       lost=Math.min(player.carried_drugs[id],Math.max(.1,g*(randInt(22,45)/100)));player.carried_drugs[id]-=lost;
-      cashLost=Math.min(player.cash_on_person,Math.floor(player.cash_on_person*(randInt(3,10)/100)));player.cash_on_person-=cashLost;heatGain=Math.min(3,heatGain+1);
+      cashLost=Math.min(player.cash_on_person,Math.floor(player.cash_on_person*(randInt(3,10)/100)));player.cash_on_person-=cashLost;heatGain=drugHeatRoll(id,g,retryCount,true,false).gain;
       lines.push(pick(STREET_DIALOGUE.setup),`Product lost: ${lost.toFixed(1)}g ${d.name}`,...(cashLost?[`Cash lost: ${money(cashLost)}`]:[]));
     }else if(kind==='police'){
-      heatGain=Math.min(3,heatGain+1);player.trap.attention=clamp((player.trap.attention||0)+randInt(4,10),0,100);
+      heatGain=Math.max(1,drugHeatRoll(id,g,retryCount,true,true).gain);player.trap.attention=clamp((player.trap.attention||0)+randInt(4,10),0,100);
       lines.push(pick(STREET_DIALOGUE.police),'Inventory kept, but police pressure increased.',`Trap Attention: ${player.trap.attention}%`);
     }else{
-      lost=Math.min(player.carried_drugs[id],Math.max(.1,g*(randInt(35,70)/100)));player.carried_drugs[id]-=lost;heatGain=3;
+      lost=Math.min(player.carried_drugs[id],Math.max(.1,g*(randInt(35,70)/100)));player.carried_drugs[id]-=lost;heatGain=Math.max(1,drugHeatRoll(id,g,retryCount,true,true).gain);
       lines.push(pick(STREET_DIALOGUE.seizure),`Product seized/lost: ${lost.toFixed(1)}g ${d.name}`);
     }
+    if(heatGain===0 && (kind==='soft'||kind==='partial'))heatGain=drugHeatRoll(id,g,retryCount,true,false).gain;
     player.heat=clamp(player.heat+heatGain,0,5);
-    lines.push(`Heat: +${heatGain}★`,`Retry pressure: ${player.daily.street_retry[id]} failed attempt${player.daily.street_retry[id]===1?'':'s'} on ${d.name} today.`);
+    lines.push(heatGain?`Heat: +${heatGain}★`:`Heat: +0★ · no immediate attention`,`Retry pressure: ${player.daily.street_retry[id]} failed attempt${player.daily.street_retry[id]===1?'':'s'} on ${d.name} today.`);
     if(player.daily.street_retry[id]>=3)lines.push('Contacts are getting nervous. Another immediate retry is significantly more dangerous.');
     result('MOVE WENT BAD',lines,'street');
   }return;
@@ -2033,10 +2070,10 @@ function handle(action){
  if(action==='takeWeaponGo'){const i=Number($('#takeWeapon').value);if(Number.isFinite(i)&&player.trap.weapons[i])player.weapon_inventory.push(player.trap.weapons.splice(i,1)[0]);saveGame();screen='stash';render();return}
  if(action.startsWith('upgrade:')){const k=action.split(':')[1];if(player.trap[k]>=5)return;const base={security:500*(player.trap.security+1),storage:400*(player.trap.storage+1),condition:300*(player.trap.condition+1)}[k],c=taxedPurchase(base);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.trap[k]++;advanceTime(60);result('TRAP UPGRADED',[`${k[0].toUpperCase()+k.slice(1)} upgraded to ${player.trap[k]}/5.`,`City Tax: -${money(c.tax)}`]);return}
  if(action==='treat'){if(player.health>=100)return;travelTo('hospital');if(screen==='result')return;const c=Math.max(50,(100-player.health)*8);if(player.cash_on_person<c){result('NOT ENOUGH CASH',[`Treatment costs ${money(c)}.`]);return}player.cash_on_person-=c;player.health=100;advanceTime(120);addSkillXP('endurance',6);result('TREATMENT COMPLETE',['Health restored to 100/100.',`Cash: -${money(c)}`]);return}
- if(action.startsWith('laylow:')){if(player.location!=='trap')return;const mode=action.split(':')[1];if(player.heat<=0){result('ALREADY COLD',['Heat is already at zero.'],'laylow');return}
-  if(mode==='4'){advanceTime(240);const ok=Math.random()<.6;if(ok)player.heat=Math.max(0,player.heat-1);player.trap.attention=Math.max(0,player.trap.attention-8);result('LAY LOW',[ok?'Heat: -1★':'Heat did not drop this time.','Trap attention cooled down.'],'laylow');return}
-  if(mode==='8'){advanceTime(480);player.heat=Math.max(0,player.heat-1);player.trap.attention=Math.max(0,player.trap.attention-15);result('LAY LOW',['Heat: -1★','Trap attention cooled down.'],'laylow');return}
-  if(mode==='day'){const drop=Math.min(player.heat,2);player.heat-=drop;player.trap.attention=Math.max(0,player.trap.attention-25);player.day++;player.time=DAY_START;player.stats.days_survived++;generateMarket();resetDaily();result('DISAPPEARED FOR THE DAY',[`Heat: -${drop}★`,'A full day passed.','Trap attention dropped.'],'laylow');return}
+ if(action.startsWith('laylow:')){const mode=action.split(':')[1];let travelLine='';if(player.location!=='trap'){const from=LOCATIONS[player.location]?.name||'your location',mins=travelTime(LOCATIONS.trap.travel);const tr=travelTo('trap');if(!tr?.ok)return;travelLine=`Fast traveled from ${from} to Your Trap: +${mins} minutes.`}if(player.heat<=0){result('ALREADY COLD',[...(travelLine?[travelLine]:[]),'Heat is already at zero.'],'laylow');return}
+  if(mode==='4'){advanceTime(240);const ok=Math.random()<.6;if(ok)player.heat=Math.max(0,player.heat-1);player.trap.attention=Math.max(0,player.trap.attention-8);result('LAY LOW',[...(travelLine?[travelLine]:[]),ok?'Heat: -1★':'Heat did not drop this time.','Trap attention cooled down.'],'laylow');return}
+  if(mode==='8'){advanceTime(480);player.heat=Math.max(0,player.heat-1);player.trap.attention=Math.max(0,player.trap.attention-15);result('LAY LOW',[...(travelLine?[travelLine]:[]),'Heat: -1★','Trap attention cooled down.'],'laylow');return}
+  if(mode==='day'){const drop=Math.min(player.heat,2);player.heat-=drop;player.trap.attention=Math.max(0,player.trap.attention-25);player.day++;player.time=DAY_START;player.stats.days_survived++;generateMarket();resetDaily();result('DISAPPEARED FOR THE DAY',[...(travelLine?[travelLine]:[]),`Heat: -${drop}★`,'A full day passed.','Trap attention dropped.'],'laylow');return}
  }
 }
 
