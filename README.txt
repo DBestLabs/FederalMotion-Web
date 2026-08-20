@@ -35,3 +35,11 @@ CITY TAX
 - Certain in-game purchases include a small City Tax / transaction fee.
 - The fee is shown before or with the purchase total so players know what they are paying.
 - It exists for game-economy balance and is not a real-world charge.
+
+
+ALPHA 0.8.3 — FLOW + WORK LOADOUT FIX
+- Result Continue now returns to the section the player was using instead of the main menu.
+- Scam gear purchases and scam jobs return to Scam Career.
+- Lay Low returns to Lay Low.
+- Employment actions return to Employment.
+- Employment now includes an in-menu option to unequip/stow the active weapon before a shift.
