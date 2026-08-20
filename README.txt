@@ -1,3 +1,14 @@
+FEDERAL MOTION — ALPHA 0.8.6 DEAL RISK + DIALOGUE UPDATE
+
+PLAYER UPDATE
+- Failed street deals now have multiple outcomes instead of always returning 100% of the inventory.
+- Possible outcomes include buyer walkouts, partial product loss, setups, police pressure, and partial seizure/loss.
+- Repeated failed attempts on the same product build retry pressure for the rest of that in-game day.
+- A successful deal resets that product's retry pressure. Sleeping into a new day resets it too.
+- Street-deal result dialogue now uses larger randomized dialogue pools so outcomes do not repeat the same sentence every time.
+- Continue returns players to Street Move after the result screen.
+- Existing saves remain compatible.
+
 FEDERAL MOTION — ALPHA 0.8.1 FLOW FIX
 
 PLAYER UPDATE

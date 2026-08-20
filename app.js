@@ -11,7 +11,7 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KlgKi5KFxRqrMbGzZIVVSQ_-JM9OlON';
 const DAY_START=8*60, WARNING_TIME=24*60, DAY_END=26*60, MAX_HEAT=5, MAX_HEALTH=100;
 const DEFAULT_MOTION_TAX_RATE=.05;
 
-let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8.5',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
+let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8.6',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
 let player=null, screen='start', payload=null;
 let actionOriginScreen='home';
 
@@ -236,6 +236,66 @@ const stars=h=>'★'.repeat(clamp(h,0,5))+'☆'.repeat(5-clamp(h,0,5));
 const formatTime=m=>{const x=((m%(24*60))+(24*60))%(24*60),h=Math.floor(x/60),min=x%60,ap=h<12?'AM':'PM';return `${h%12||12}:${String(min).padStart(2,'0')} ${ap}`};
 const escapeHtml=s=>String(s).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 
+const pick=arr=>arr[randInt(0,arr.length-1)];
+const STREET_DIALOGUE={
+ success:[
+  'Buyer came correct. Quick exchange and everybody kept moving.',
+  'Contact showed up on time and the deal went clean.',
+  'Everything lined up. Money changed hands and you were gone.',
+  'Buyer checked the product, nodded once, and paid up.',
+  'No drama this time. The move went exactly how it was supposed to.',
+  'A trusted contact vouched for the buyer. Easy money.',
+  'The buyer was nervous, but the cash was real.',
+  'You kept it short, got paid, and left before the block got curious.',
+  'Demand was there and the buyer did not waste your time.',
+  'The connection held up. Another clean move in the books.'
+ ],
+ soft:[
+  'Buyer got cold feet and disappeared before the meet.',
+  'The contact stopped answering. You called the move off.',
+  'Buyer changed the meetup twice. Something felt wrong, so you walked.',
+  'The money never showed. You kept the product and left.',
+  'Word came back that the buyer was not ready. Deal dead for now.',
+  'The buyer stalled too long. You packed it up and moved on.',
+  'Nothing looked right at the spot. Better to lose time than inventory.',
+  'The contact said five minutes for almost an hour. You were done waiting.',
+  'The buyer backed out at the last second. Annoying, but nothing was lost.',
+  'The opportunity dried up before money ever hit your hand.'
+ ],
+ partial:[
+  'The move got messy and part of the package disappeared in the confusion.',
+  'A middleman came up short. You recovered most of it, not all of it.',
+  'The buyer tried something slick. You got out, but some product was gone.',
+  'The deal scattered when the area got hot. You could not recover everything.',
+  'A handoff went sideways. Most of the inventory made it back with you.',
+  'Everybody started moving at once and some of the package vanished.',
+  'You cut the deal short, but not before losing part of the load.',
+  'The contact swears the missing amount was a mistake. Sure.'
+ ],
+ setup:[
+  'It felt like a setup. You got away, but it cost you inventory and cash.',
+  'The buyer brought company you were not expecting. You paid to get out clean.',
+  'Somebody tried to finesse the deal. You escaped with less than you arrived with.',
+  'The whole meet turned sketchy fast. You abandoned part of the load and bounced.',
+  'Your contact picked the wrong people. You made it out, but took a real loss.',
+  'The buyer made a play for the package. You saved yourself, not all the product.'
+ ],
+ police:[
+  'An unmarked car kept circling the area. You killed the deal and left hot.',
+  'Police presence spiked right before the meet. Nobody wanted to move.',
+  'The buyer spotted patrol cars and vanished. The block is hotter now.',
+  'Too many eyes were around the location. You kept the product but drew attention.',
+  'Somebody tipped that police were nearby. You shut everything down.',
+  'The meet never happened. Sirens nearby made everybody disappear.'
+ ],
+ seizure:[
+  'The pressure finally caught up. Part of the load got seized before you escaped.',
+  'The deal collapsed into a police scramble. You got away, but not with everything.',
+  'You slipped the worst of it, but a chunk of the inventory was gone.',
+  'Too many failed attempts put eyes on the operation. This one cost real product.'
+ ]
+};
+
 const ICONS={phone:'📱',cash:'💵',heat:'🚨',health:'❤️',xp:'⚡',respect:'👑',weapon:'🔫',armor:'🛡️',ride:'🚗',jobs:'🎯',street:'🧱',supplier:'🤝',market:'🛒',crew:'👥',map:'🗺️',garage:'🏎️',property:'🏠',stash:'📦',upgrade:'🛠️',laylow:'🌙',skills:'📈',objectives:'📋',achievements:'🏆',hospital:'🏥',status:'📊',sleep:'🛏️',save:'💾',owner:'💰',dashboard:'🛰️',bank:'🏦',profile:'🪪',playercrew:'🛡️',territory:'🗺️',hq:'🏴',alert:'⚠️'};
 function icon(k){return ICONS[k]||'•'}
 function meter(label,value,max,cls=''){const pct=clamp((Number(value)||0)/Math.max(1,max)*100,0,100);return `<div class="meter-block ${cls}"><div class="meter-label"><span>${escapeHtml(label)}</span><strong>${Math.round(value)}/${Math.round(max)}</strong></div><div class="meter"><div style="width:${pct}%"></div></div></div>`}
@@ -300,12 +360,13 @@ function migratePlayer(p){
  if(!p.stats.job_counts||typeof p.stats.job_counts!=='object')p.stats.job_counts={};
  for(const k of ['total_expenses','total_property_income','random_events','total_banked'])if(!Number.isFinite(p.stats[k]))p.stats[k]=0;
  if(!p.daily||typeof p.daily!=='object')p.daily={};
+ if(!p.daily.street_retry||typeof p.daily.street_retry!=='object')p.daily.street_retry={};
  if(!p.daily.job_counts||typeof p.daily.job_counts!=='object')p.daily.job_counts={};
  if(!p.daily.hustle_counts||typeof p.daily.hustle_counts!=='object')p.daily.hustle_counts={};
  if(!Number.isFinite(p.daily.moves_attempted))p.daily.moves_attempted=(p.daily.successes||0)+(p.daily.failures||0);
  return p;
 }
-function resetDaily(){player.daily={cash_start:player.cash_on_person+player.trap.cash+(player.bank_cash||0),xp_start:player.xp,respect_start:player.respect,heat_start:player.heat,successes:0,failures:0,job_counts:{},hustle_counts:{},moves_attempted:0,hustles_completed:0,legit_shifts:0,fraud_jobs:0,earned:0,heat_reduced:0,supplier_buys:0}}
+function resetDaily(){player.daily={cash_start:player.cash_on_person+player.trap.cash+(player.bank_cash||0),xp_start:player.xp,respect_start:player.respect,heat_start:player.heat,successes:0,failures:0,job_counts:{},hustle_counts:{},moves_attempted:0,hustles_completed:0,legit_shifts:0,fraud_jobs:0,earned:0,heat_reduced:0,supplier_buys:0,street_retry:{}}}
 function saveGame(){if(!player)return;localStorage.setItem(SAVE_KEY,JSON.stringify(player));if(fmBackend.ready)syncCloudSave()}
 function loadGame(){try{return migratePlayer(JSON.parse(localStorage.getItem(SAVE_KEY)||localStorage.getItem(LEGACY_SAVE_KEY)))}catch{return null}}
 function hasSave(){return !!(localStorage.getItem(SAVE_KEY)||localStorage.getItem(LEGACY_SAVE_KEY))}
@@ -1881,30 +1942,54 @@ function handle(action){
  if(action==='streetGo'){
   const id=$('#streetDrug').value,g=Math.min(parseFloat($('#streetGrams').value||0),player.carried_drugs[id]);if(g<=0)return;
   const d=DRUGS[id],zoneStreet=territoryBonusPercent('street');
-  // Economy 0.8.5: every successful street sale is profitable, and higher drug tiers have higher profit ceilings.
-  // Profit bands are based on supplier cost + City Tax so a successful move never pays less than acquisition cost.
-  const profitBands={
-    weed:[.18,.28],shrooms:[.22,.34],pills:[.24,.36],lean:[.26,.38],
-    cocaine:[.32,.48],meth:[.38,.58],heroin:[.48,.72]
-  };
+  player.daily.street_retry=player.daily.street_retry||{};
+  const retryCount=Math.max(0,Number(player.daily.street_retry[id]||0));
+  const profitBands={weed:[.18,.28],shrooms:[.22,.34],pills:[.24,.36],lean:[.26,.38],cocaine:[.32,.48],meth:[.38,.58],heroin:[.48,.72]};
   const [minProfit,maxProfit]=profitBands[id]||[.18,.28];
   const unitCost=supplierUnitPrice(id)*(1+fmBackend.taxRate);
-  // Bulk still compresses the margin toward the bottom of the band, but can never turn a successful sale into a loss.
   const bulkPressure=clamp(Math.log10(Math.max(1,g/100))*0.12,0,.75);
   const rolledProfit=minProfit+(maxProfit-minProfit)*Math.random();
   const profitRate=Math.max(minProfit,rolledProfit-(maxProfit-minProfit)*bulkPressure);
   const pay=Math.floor(g*unitCost*(1+profitRate)*(1+zoneStreet/100));
-  const chance=Math.max(24,92-d.risk*4-heatPenalty()+skillLevel('street')-Math.min(18,Math.floor(Math.log10(Math.max(1,g))*4)));
+  const retryPenalty=Math.min(18,retryCount*6);
+  const chance=Math.max(18,92-d.risk*4-heatPenalty()+skillLevel('street')-Math.min(18,Math.floor(Math.log10(Math.max(1,g))*4))-retryPenalty);
   advanceTime(randInt(35,65));if(screen==='result')return;player.stats.moves++;addSkillXP('street',12);
   if(randInt(1,100)<=chance){
+    player.daily.street_retry[id]=0;
     player.carried_drugs[id]-=g;player.cash_on_person+=pay;player.stats.total_earned+=pay;
     const xp=Math.min(1800,Math.max(15,Math.floor(45*Math.sqrt(g))));player.xp+=xp;
     const bulkHeat=g>=2000?2:g>=500?1:0;const riskHeat=(randInt(1,100)<=d.risk*10?1:0);const heatGain=Math.min(3,bulkHeat+riskHeat);
     player.heat=clamp(player.heat+heatGain,0,5);player.stats.successful_moves++;player.daily.successes++;
-    const lvl=updateLevel();result('MOVE SUCCESSFUL',[`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(heatGain?[`Heat: +${heatGain}★`]:[]),...(lvl?[lvl]:[])])
+    const lvl=updateLevel();result('MOVE SUCCESSFUL',[pick(STREET_DIALOGUE.success),`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(heatGain?[`Heat: +${heatGain}★`]:[]),...(lvl?[lvl]:[])],'street');
   }else{
-    player.stats.failed_moves++;player.daily.failures++;const heatGain=g>=1000?2:1;player.heat=clamp(player.heat+heatGain,0,5);result('MOVE WENT BAD',['The opportunity fell apart.','No inventory was lost.',`Heat: +${heatGain}★`])
-  }return
+    player.stats.failed_moves++;player.daily.failures++;player.daily.street_retry[id]=retryCount+1;
+    const danger=clamp(d.risk*7+retryCount*12+player.heat*5+(g>=1000?10:0),10,85),roll=randInt(1,100);
+    let kind='soft';
+    if(roll<=Math.max(4,danger*.10))kind='seizure';
+    else if(roll<=Math.max(10,danger*.28))kind='police';
+    else if(roll<=Math.max(18,danger*.48))kind='setup';
+    else if(roll<=Math.max(32,danger*.72))kind='partial';
+    let heatGain=g>=1000?2:1,lost=0,cashLost=0;const lines=[];
+    if(kind==='soft')lines.push(pick(STREET_DIALOGUE.soft),'Inventory kept: 100%');
+    else if(kind==='partial'){
+      lost=Math.min(player.carried_drugs[id],Math.max(.1,g*(randInt(10,28)/100)));player.carried_drugs[id]-=lost;
+      lines.push(pick(STREET_DIALOGUE.partial),`Product lost: ${lost.toFixed(1)}g ${d.name}`);
+    }else if(kind==='setup'){
+      lost=Math.min(player.carried_drugs[id],Math.max(.1,g*(randInt(22,45)/100)));player.carried_drugs[id]-=lost;
+      cashLost=Math.min(player.cash_on_person,Math.floor(player.cash_on_person*(randInt(3,10)/100)));player.cash_on_person-=cashLost;heatGain=Math.min(3,heatGain+1);
+      lines.push(pick(STREET_DIALOGUE.setup),`Product lost: ${lost.toFixed(1)}g ${d.name}`,...(cashLost?[`Cash lost: ${money(cashLost)}`]:[]));
+    }else if(kind==='police'){
+      heatGain=Math.min(3,heatGain+1);player.trap.attention=clamp((player.trap.attention||0)+randInt(4,10),0,100);
+      lines.push(pick(STREET_DIALOGUE.police),'Inventory kept, but police pressure increased.',`Trap Attention: ${player.trap.attention}%`);
+    }else{
+      lost=Math.min(player.carried_drugs[id],Math.max(.1,g*(randInt(35,70)/100)));player.carried_drugs[id]-=lost;heatGain=3;
+      lines.push(pick(STREET_DIALOGUE.seizure),`Product seized/lost: ${lost.toFixed(1)}g ${d.name}`);
+    }
+    player.heat=clamp(player.heat+heatGain,0,5);
+    lines.push(`Heat: +${heatGain}★`,`Retry pressure: ${player.daily.street_retry[id]} failed attempt${player.daily.street_retry[id]===1?'':'s'} on ${d.name} today.`);
+    if(player.daily.street_retry[id]>=3)lines.push('Contacts are getting nervous. Another immediate retry is significantly more dangerous.');
+    result('MOVE WENT BAD',lines,'street');
+  }return;
 }
  if(action.startsWith('buyWeapon:')){const id=action.split(':')[1],w=WEAPONS[id],c=taxedPurchase(w.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including City Tax.`]);return}player.weapon_inventory.push({id,condition:w.condition,upgrades:0});advanceTime(30);result('PURCHASE COMPLETE',[`Purchased ${w.name}.`,`Base: -${money(c.base)}`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action.startsWith('buyArmor:')){const id=action.split(':')[1],a=ARMOR[id],c=taxedPurchase(a.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including City Tax.`]);return}player.armor_inventory.push(id);advanceTime(25);result('PURCHASE COMPLETE',[`Purchased ${a.name}.`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
