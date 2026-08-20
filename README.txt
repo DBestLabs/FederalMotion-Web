@@ -1,36 +1,62 @@
-FEDERAL MOTION — ALPHA 0.8.6 CITY CONSEQUENCES
+FEDERAL MOTION — ALPHA 0.8.1 FLOW FIX
 
-Federal Motion is a browser-based crime/life progression game. Build money, manage Heat, grow through multiple economic lanes, own property, build a crew and survive the consequences of getting too much motion.
+PLAYER UPDATE
+- Result screens now keep track of where you came from.
+- Continue returns you to the same section instead of forcing you back to the main menu.
+- A separate Main Menu button is available when you actually want to leave the section.
+- This fixes repeated actions such as Lay Low, scam plays, employment actions, upgrades, purchases, and other section-based gameplay.
+
+FEDERAL MOTION — ALPHA 0.8 CITY PRESSURE UPDATE
+
+Federal Motion is an evolving browser-based crime/life progression game. Start at the bottom, manage your time and Heat, build money and reputation, and choose how you move through the city.
 
 WHAT'S NEW
-- New Investigation / Case system separate from Heat.
-- Case progression: No Case → Person of Interest → Active Investigation → Warrant Pending → Warrant Issued → Federal Case.
-- High-risk activity can build a case even when Heat later cools down.
-- Warrants, surveillance and raids now matter more.
-- Arrests now open a Booking screen instead of instantly skipping jail consequences.
-- Booking options include bond, jail time and multiple lawyer tiers.
-- Emergency Fund can be used for bond and lawyer costs.
-- Property economy rebalanced so income-focused properties have positive expected net income.
-- Property cards now show Income, Upkeep, Estimated Net and a clear gameplay Benefit.
-- Homes can be utility/status properties instead of passive-income properties.
-- Apartment improves Lay Low and property attention.
-- Private Garage reduces vehicle repair costs.
-- Second Trap reduces investigation/raid exposure.
-- Business Front is the strongest clean passive-income property.
-- Luxury Property improves status/recovery-style progression.
-- City Map locations now explain their purpose and connect directly to gameplay after travel.
-- Existing Alpha 0.8.5 economy ladder remains: higher progression tiers have higher earning ceilings.
+- Police pressure now escalates through traffic stops, searches, warrants, surveillance, raids and arrests.
+- 5-star Heat never blocks a move. Higher Heat means higher consequences.
+- Driver and carry licenses can affect police encounters.
+- New Scam Career progression with fictional equipment, reputation and higher-tier abstract jobs.
+- Phone Alerts surface important city pressure and events.
+- Daily and weekly objectives with claimable rewards.
+- Vehicle condition and repairs add more ownership depth.
+- Properties remain part of storage, security, income and status progression.
+- New players receive a protected walkthrough.
+- Returning early-wave players receive a one-time Alpha 0.8 appreciation message and reward.
 
-CITY MAP
-The city is no longer travel for travel's sake. Locations connect to systems such as Suppliers, Black Market, Employment, Garage, Properties, Crew, Territories, Hospital, Emergency Fund and major moves.
-
-POLICE & CASES
-5-star Heat never blocks a move. You can keep taking the risk. Heat can cool relatively quickly, while an Investigation takes longer to disappear. Repeated high-risk activity can build toward warrants, raids, seizure and arrest.
-
-PROPERTY DESIGN
-Not every property is supposed to print cash. Homes focus on utility/status, while income properties are designed to create positive expected value. Check each property card for its exact benefit.
+HOW TO PLAY
+The game day starts at 8:00 AM. Actions and travel use time. Build money through legit work, Quick Moves and other progression paths, manage Heat, use your stash and Cash Reserve, improve equipment and properties, and return home before sleeping.
 
 NOTES
-- Existing browser saves remain compatible.
-- Scam/fraud systems are fictionalized game mechanics and do not provide real-world instructions.
+- Save data remains compatible with prior browser saves.
+- The scam/fraud career is fictionalized gameplay and does not provide real-world instructions.
 - This README contains player-facing information only.
+
+
+CITY TAX
+- Certain in-game purchases include a small City Tax / transaction fee.
+- The fee is shown before or with the purchase total so players know what they are paying.
+- It exists for game-economy balance and is not a real-world charge.
+
+
+ALPHA 0.8.3 — FLOW + WORK LOADOUT FIX
+- Result Continue now returns to the section the player was using instead of the main menu.
+- Scam gear purchases and scam jobs return to Scam Career.
+- Lay Low returns to Lay Low.
+- Employment actions return to Employment.
+- Employment now includes an in-menu option to unequip/stow the active weapon before a shift.
+
+ALPHA 0.8.4 — ECONOMY BALANCE
+- Rebalanced street-sale margins so higher-tier inventory has stronger profit upside.
+- Bulk sales now have diminishing returns, more risk, and capped XP scaling.
+- Large bulk moves can create additional Heat.
+- Major heist payouts increased so crew jobs remain worthwhile after cuts.
+- Player-facing Cash Reserve renamed Emergency Fund for clarity.
+- City Tax remains the player-facing transaction-fee name.
+
+
+ALPHA 0.8.5 — ECONOMY LADDER
+- Successful street sales now always pay above supplier cost + City Tax.
+- Drug profit potential increases by tier; Heroin has the highest drug profit ceiling.
+- Scam Career payouts increase by tier; the final scam-career play has the highest scam payout.
+- Quick Moves now have a clearer low-to-extreme risk income ladder.
+- Robberies and heists scale more clearly with requirements, danger and progression.
+- Higher-tier activities require more setup and carry more consequences, but reward a higher earning ceiling.

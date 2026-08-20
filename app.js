@@ -11,7 +11,7 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KlgKi5KFxRqrMbGzZIVVSQ_-JM9OlON';
 const DAY_START=8*60, WARNING_TIME=24*60, DAY_END=26*60, MAX_HEAT=5, MAX_HEALTH=100;
 const DEFAULT_MOTION_TAX_RATE=.05;
 
-let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8.6',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
+let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8.5',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
 let player=null, screen='start', payload=null;
 let actionOriginScreen='home';
 
@@ -71,13 +71,13 @@ const PROPERTIES={
 };
 
 const PROPERTY_ECONOMY={
- starter_trap:{income:[0,0],upkeep:0,perk:'Basic stash, sleep and trap upgrades.'},
- apartment:{income:[0,0],upkeep:25,perk:'Better Lay Low odds and reduced property attention.'},
- garage_property:{income:[70,120],upkeep:45,perk:'25% cheaper vehicle repairs and protected vehicle storage.'},
- second_trap:{income:[160,260],upkeep:75,perk:'Backup stash location and lower raid pressure.'},
- warehouse_property:{income:[350,575],upkeep:150,perk:'Large storage and stronger passive income.'},
- business_front:{income:[700,1100],upkeep:275,perk:'Best clean passive-income property and business progression.'},
- luxury_home:{income:[0,0],upkeep:350,perk:'Status property: better recovery, Lay Low and passive respect.'},
+ starter_trap:{income:[0,0],upkeep:0},
+ apartment:{income:[0,0],upkeep:20},
+ garage_property:{income:[10,45],upkeep:35},
+ second_trap:{income:[90,190],upkeep:65},
+ warehouse_property:{income:[180,360],upkeep:130},
+ business_front:{income:[300,650],upkeep:220},
+ luxury_home:{income:[0,0],upkeep:275},
 };
 const VEHICLE_UPKEEP={bicycle:0,beater:12,muscle:30,suv:42,sport:65,executive:90};
 const CREW_UPKEEP={rico:18,ace:30,brick:40,nova:48,saint:55};
@@ -184,38 +184,16 @@ const WEEKLY_OBJECTIVE_POOL=[
  ['Complete a major move',p=>(p.weekly?.major_moves||0)>=1],['Lower Heat 3 times',p=>(p.weekly?.heat_reduced||0)>=3]
 ];
 function hasScamGear(id){return (player.scam?.gear||[]).includes(id)}
-function caseStatus(){
- const n=clamp(Math.round(player.investigation||0),0,100);
- if(n>=85)return 'Federal Case';
- if(n>=70)return 'Warrant Issued';
- if(n>=50)return 'Warrant Pending';
- if(n>=25)return 'Active Investigation';
- if(n>=1)return 'Person of Interest';
- return 'No Case';
-}
-function addInvestigation(points,reason='Activity'){
- const before=player.investigation||0;
- const shield=player.properties?.includes('second_trap')?.85:1;player.investigation=clamp(before+Math.max(0,Math.round((points||0)*shield)),0,100);
- if(player.investigation>=70)player.warrants=Math.max(1,player.warrants||0);
- if(Math.floor(before/25)!==Math.floor(player.investigation/25))addAlert(`${caseStatus()} · Case ${Math.round(player.investigation)}%`, 'CASE');
- addActivity(`${reason}: investigation ${Math.round(before)}% → ${Math.round(player.investigation)}%`);
-}
-function policePressure(){return clamp((player.heat||0)*15+(player.warrants||0)*12+(player.trap?.attention||0)*.12+(player.investigation||0)*.45,0,99)}
+function policePressure(){return clamp((player.heat||0)*18+(player.warrants||0)*12+(player.trap?.attention||0)*.15,0,98)}
 function addAlert(text,type='CITY'){player.alerts=player.alerts||[];player.alerts.unshift({day:player.day,time:formatTime(player.time),type,text});player.alerts=player.alerts.slice(0,40);player.messages.unshift({from:type,text,day:player.day})}
 function policeCheck(reason='CITY PRESSURE'){
- if(player.heat<=0&&(player.investigation||0)<25)return [];
+ if(player.heat<=0)return [];
  const roll=randInt(1,100),pressure=policePressure(),lines=[];
  if(roll>pressure*.42)return lines;
- const casePct=player.investigation||0;
- if(player.heat<=2&&casePct<50){lines.push('POLICE: Traffic stop.');if(player.active_vehicle!=='bicycle'&&!player.licenses.drivers){const fine=Math.min(120,player.cash_on_person);player.cash_on_person-=fine;lines.push(`No driver license: ${money(fine)} citation.`)}if(player.equipped_weapon&&!player.licenses.carry){player.heat=clamp(player.heat+1,0,5);addInvestigation(3,'Unpermitted carry');lines.push('Unpermitted carry raised Heat: +1★')}}
- else if(casePct<70&&player.heat<=3){player.warrants=Math.max(1,player.warrants||0);addInvestigation(4,'Search pressure');lines.push('POLICE: Detectives are building the case. Search pressure increased.');addAlert('Detectives are asking questions. Case pressure increased.','POLICE')}
- else if(casePct<85&&player.heat<=4){player.warrants=Math.max(1,player.warrants||0);player.trap.attention=clamp(player.trap.attention+12,0,100);addInvestigation(5,'Warrant pressure');lines.push('POLICE: Warrant pressure + property surveillance.');addAlert('Police surveillance increased around your properties.','POLICE')}
- else {
-  player.warrants=Math.max(1,player.warrants||0);player.trap.attention=clamp(player.trap.attention+20,0,100);addInvestigation(6,'Raid pressure');
-  const raid=randInt(1,100)<=45+(player.heat||0)*6;
-  if(raid){const protect=player.properties.includes('second_trap')?.55:1,seized=Math.min(player.trap.cash,Math.floor(player.trap.cash*protect*(.12+Math.random()*.18)));player.trap.cash-=seized;if(seized>0)queueOwnerLoss(seized,'raid_seizure');lines.push(`RAID: Police hit a property. Cash seized: ${money(seized)}.`);if(seized>0)addAlert(`Raid seizure: ${money(seized)} taken from stored cash.`,'POLICE')}
-  else {lines.push('RAID WARNING: You slipped the sweep, but the case is still active.');addAlert('Raid pressure is active. The case did not disappear.','POLICE')}
- }
+ if(player.heat<=2){lines.push('POLICE: Traffic stop.');if(player.active_vehicle!=='bicycle'&&!player.licenses.drivers){player.cash_on_person=Math.max(0,player.cash_on_person-120);lines.push('No driver license: $120 citation.')}if(player.equipped_weapon&&!player.licenses.carry){player.heat=clamp(player.heat+1,0,5);lines.push('Unpermitted carry raised Heat: +1★')}}
+ else if(player.heat===3){player.warrants=Math.max(1,player.warrants||0);lines.push('POLICE: Search pressure escalated. A warrant is now active.');addAlert('A warrant was issued. Searches and stops are more dangerous.','POLICE')}
+ else if(player.heat===4){player.warrants=Math.max(1,player.warrants||0);player.trap.attention=clamp(player.trap.attention+12,0,100);lines.push('POLICE: Active warrant + property surveillance. Trap attention +12%.');addAlert('Police surveillance increased around your properties.','POLICE')}
+ else {const arrest=randInt(1,100)<=55+(player.warrants||0)*8;if(arrest){player.stats.arrests=(player.stats.arrests||0)+1;player.cash_on_person=Math.floor(player.cash_on_person*.65);player.heat=3;player.warrants=0;player.time=DAY_START;lines.push('ARREST: You lost 35% of carried cash and came back at 3★ Heat.')}else{player.trap.attention=clamp(player.trap.attention+20,0,100);lines.push('RAID WARNING: You slipped the sweep. Trap attention +20%.');addAlert('Raid pressure is active. Stashing and laying low may be smart.','POLICE')}}
  addActivity(`${reason}: ${lines[0]||'Police pressure'}`);return lines;
 }
 function ensureObjectives(){
@@ -273,7 +251,7 @@ function newPlayer(name='Player'){
   skills:{combat:{xp:0,level:1},street:{xp:0,level:1},charisma:{xp:0,level:1},driving:{xp:0,level:1},business:{xp:0,level:1},endurance:{xp:0,level:1}},
   achievements:[],messages:[{from:'Unknown',text:'Everybody starts somewhere. Get some motion.'}],
   stats:{moves:0,successful_moves:0,failed_moves:0,hospital_visits:0,arrests:0,days_survived:1,biggest_score:0,highest_heat:0,total_earned:0,total_expenses:0,total_property_income:0,random_events:0,total_banked:0,job_counts:{},legit_shifts:0,legit_pay_earned:0},
-  licenses:{drivers:false,carry:false},warrants:0,investigation:0,active_case:'',legal_case:null,scam:{gear:[],rep:0,jobs:0},alerts:[],objective_claims:[],og_reward_claimed:false,og_reward_eligible:false,weekly:{week:1,earned:0,hustles:0,legit_shifts:0,fraud_jobs:0,major_moves:0,heat_reduced:0,claimed:[]},daily:{}
+  licenses:{drivers:false,carry:false},warrants:0,scam:{gear:[],rep:0,jobs:0},alerts:[],objective_claims:[],og_reward_claimed:false,og_reward_eligible:false,weekly:{week:1,earned:0,hustles:0,legit_shifts:0,fraud_jobs:0,major_moves:0,heat_reduced:0,claimed:[]},daily:{}
  };
 }
 function migratePlayer(p){
@@ -305,9 +283,6 @@ function migratePlayer(p){
  if(typeof p.tutorial.seen_version!=='string')p.tutorial.seen_version='';
  if(!p.licenses||typeof p.licenses!=='object')p.licenses={drivers:false,carry:false};
  if(!Number.isFinite(p.warrants))p.warrants=0;
- if(!Number.isFinite(p.investigation))p.investigation=0;
- if(typeof p.active_case!=='string')p.active_case='';
- if(p.legal_case!==null && typeof p.legal_case!=='object')p.legal_case=null;
  if(!p.scam||typeof p.scam!=='object')p.scam={gear:[],rep:0,jobs:0};
  if(!Array.isArray(p.scam.gear))p.scam.gear=[];
  if(!Array.isArray(p.alerts))p.alerts=[];
@@ -632,7 +607,7 @@ function render(){
   black:renderBlack,weapons:renderWeapons,armor:renderArmor,equip:renderEquip,crew:renderCrew,map:renderMap,stash:renderStash,
   upgrades:renderUpgrades,hospital:renderHospital,status:renderStatus,market:renderMarket,phone:renderPhone,objectives:renderObjectives,
   achievements:renderAchievements,skills:renderSkills,laylow:renderLayLow,vehicles:renderVehicles,properties:renderProperties,
-  howto:renderHowTo,tutorial:renderTutorial,whatsnew:renderWhatsNew,patch:renderPatchNotes,activityHistory:renderActivityHistory,leaderboard:renderLeaderboard,bank:renderBank,employment:renderEmployment,licenses:renderLicenses,scamCareer:renderScamCareer,phoneAlerts:renderPhoneAlerts,dailyWeekly:renderDailyWeekly,profile:renderProfile,moveConfirm:renderMoveConfirm,playerCrew:renderPlayerCrew,territories:renderTerritories,territoryDetail:renderTerritoryDetail,ownerWallet:renderOwnerWallet,ownerDashboard:renderOwnerDashboard,booking:renderBooking
+  howto:renderHowTo,tutorial:renderTutorial,whatsnew:renderWhatsNew,patch:renderPatchNotes,activityHistory:renderActivityHistory,leaderboard:renderLeaderboard,bank:renderBank,employment:renderEmployment,licenses:renderLicenses,scamCareer:renderScamCareer,phoneAlerts:renderPhoneAlerts,dailyWeekly:renderDailyWeekly,profile:renderProfile,moveConfirm:renderMoveConfirm,playerCrew:renderPlayerCrew,territories:renderTerritories,territoryDetail:renderTerritoryDetail,ownerWallet:renderOwnerWallet,ownerDashboard:renderOwnerDashboard
  };
  if(screen==='supplierShop')html+=renderSupplierShop(payload);else html+=(map[screen]||renderHome)();
  app().innerHTML=html+`<div class="footer-note">${fmBackend.ready?'Local save + cloud sync active.':'Local save active. Cloud will sync when connected.'}</div>`;
@@ -864,10 +839,7 @@ function renderEquip(){
  return `${btn('← Black Market','black','','back')}<div class="card"><div class="section-title">EQUIP GEAR</div><label>Weapon</label><select id="equipWeapon"><option value="">Unarmed</option>${ws}</select><label>Armor</label><select id="equipArmor"><option value="">None</option>${as}</select><div style="margin-top:10px">${btn('Equip','equipGo','','primary')}</div></div>`;
 }
 function renderCrew(){return `${back()}<div class="card"><div class="section-title">YOUR CREW</div>${player.crew.length?player.crew.map(id=>`<div class="item">${CREW[id].name} · ${CREW[id].role} · Loyalty ${CREW[id].loyalty}% · Cut ${CREW[id].cut}%</div>`).join(''):'<div class="muted">Nobody yet.</div>'}</div><div class="section-title">AVAILABLE</div><div class="list">${Object.entries(CREW).filter(([id])=>!player.crew.includes(id)).map(([id,c])=>{const q=purchaseQuote(c.price);return `<div class="item"><div class="item-head"><span>${c.name} · ${c.role}</span><span>${money(q.total)}</span></div><div class="item-meta">Combat ${c.combat} · Driving ${c.driving} · Loyalty ${c.loyalty}% · Cut ${c.cut}%</div>${btn('Hire',`hire:${id}`,'','primary')}</div>`}).join('')||'<div class="card">Everybody available is already with you.</div>'}</div>`}
-function locationPurpose(id){return ({
- trap:'Stash cash/gear, Lay Low, upgrade the trap and end the day.',corner_store:'Small city hustles and low-risk opportunities.',apartments:'Property progression and lower-profile living.',hospital:'Treatment and recovery.',supplier:'Buy drug inventory and build supplier trust.',black_market:'Weapons, armor, phones and restricted gear.',shopping_strip:'Legit employment and city hustles.',warehouse:'Warehouse work, property utility and higher-tier opportunities.',garage:'Buy, equip and repair vehicles.',bank:'Emergency Fund and high-risk financial opportunities.',crew_spot:'Recruit/manage crew.',rival_territory:'Crew territory pressure and street control.',freight_yard:'Higher-risk jobs and freight opportunities.',secure_warehouse:'Major robbery/heist staging area.',military_facility:'Endgame high-risk heist location.'}[id]||'Travel here for city activity.')}
-function locationAction(id){return ({trap:['Open Trap','stash'],corner_store:['Quick Moves','hustles'],apartments:['Properties','properties'],hospital:['Hospital','hospital'],supplier:['Suppliers','supplier'],black_market:['Black Market','black'],shopping_strip:['Employment','employment'],warehouse:['Quick Moves','hustles'],garage:['Garage','vehicles'],bank:['Emergency Fund','bank'],crew_spot:['Crew','crew'],rival_territory:['Territories','territories'],freight_yard:['Make a Move','moves'],secure_warehouse:['Make a Move','moves'],military_facility:['Make a Move','moves']}[id]||null)}
-function renderMap(){const areas=['Southside','Midtown','Outskirts'];return `${back()}<div class="card"><div class="section-title">WHY TRAVEL?</div><div class="muted">Locations now connect directly to their gameplay. Travel somewhere, then use the location action instead of the map being decoration.</div></div>${areas.map(area=>`<div class="section-title">${area.toUpperCase()}</div><div class="list">${Object.entries(LOCATIONS).filter(([,l])=>l.area===area).map(([id,l])=>{const a=locationAction(id);return `<div class="item"><div class="item-head"><span>${l.name}</span><span>${travelTime(l.travel)} min</span></div><div class="item-meta">${locationPurpose(id)}</div>${player.location===id?(a?btn(a[0],`locationAction:${id}`,'','primary'):btn('You Are Here','noop')):btn('Travel',`travel:${id}`,'','primary')}</div>`}).join('')}</div>`).join('')}`}
+function renderMap(){const areas=['Southside','Midtown','Outskirts'];return `${back()}${areas.map(area=>`<div class="section-title">${area.toUpperCase()}</div><div class="list">${Object.entries(LOCATIONS).filter(([,l])=>l.area===area).map(([id,l])=>`<div class="item"><div class="item-head"><span>${l.name}</span><span>${travelTime(l.travel)} min</span></div>${btn(player.location===id?'You Are Here':'Travel',`travel:${id}`,'',player.location===id?'':'primary')}</div>`).join('')}</div>`).join('')}`}
 function drugList(inv){const x=Object.entries(inv).filter(([,g])=>g>.001);return x.length?x.map(([id,g])=>`<div class="stat"><span>${DRUGS[id].name}</span><strong>${g.toFixed(1)}g</strong></div>`).join(''):'<div class="muted">Empty</div>'}
 function renderStash(){
  if(player.location!=='trap')return `${back()}<div class="card">You need to be at your trap to manage the stash.</div>`;
@@ -904,7 +876,7 @@ function renderPhone(){
 
 function renderPhoneAlerts(){
  const rows=(player.alerts||[]).map(a=>`<div class="item"><div class="item-head"><span>${escapeHtml(a.type)}</span><span>Day ${a.day}</span></div><div class="item-meta">${escapeHtml(a.time)} · ${escapeHtml(a.text)}</div></div>`).join('');
- return `${back()}<div class="card"><div class="section-title">CITY PRESSURE</div><div class="status-grid">${stat('Heat',stars(player.heat))}${stat('Investigation',`${Math.round(player.investigation||0)}%`)}${stat('Case Status',caseStatus())}${stat('Warrants',player.warrants||0)}${stat('Pressure',`${Math.round(policePressure())}%`)}${stat('Trap Attention',`${player.trap.attention}%`)}</div><div class="muted">Heat can cool down. Investigation is slower to disappear and can keep building toward warrants, raids and arrest even after you lay low.</div></div><div class="section-title">ALERTS</div><div class="list">${rows||'<div class="card muted">No alerts yet.</div>'}</div>`;
+ return `${back()}<div class="card"><div class="section-title">CITY PRESSURE</div><div class="status-grid">${stat('Heat',stars(player.heat))}${stat('Warrants',player.warrants||0)}${stat('Pressure',`${Math.round(policePressure())}%`)}${stat('Trap Attention',`${player.trap.attention}%`)}</div><div class="muted">5★ never blocks a move. It means you are choosing to operate while police pressure is at its worst.</div></div><div class="section-title">ALERTS</div><div class="list">${rows||'<div class="card muted">No alerts yet.</div>'}</div>`;
 }
 function renderLicenses(){return `${back()}<div class="card"><div class="section-title">CITY LICENSES</div><div class="muted">Licenses do not stop illegal choices. They change what happens during police encounters.</div></div><div class="list">${Object.entries(LICENSES).map(([id,x])=>`<div class="item"><div class="item-head"><span>${escapeHtml(x.name)}</span><span>${player.licenses[id]?'ACTIVE':money(x.price)}</span></div><div class="item-meta">${escapeHtml(x.desc)}</div>${player.licenses[id]?'':btn('Get License',`buyLicense:${id}`,'','primary')}</div>`).join('')}</div>`}
 function renderScamCareer(){const gear=Object.entries(SCAM_GEAR).map(([id,g])=>`<div class="item"><div class="item-head"><span>${escapeHtml(g.name)}</span><span>${hasScamGear(id)?'OWNED':money(g.price)}</span></div><div class="item-meta">Career tool · Tier ${g.tier}</div>${hasScamGear(id)?'':btn('Buy Tool',`buyScamGear:${id}`,'','primary')}</div>`).join('');const jobs=Object.entries(FRAUD_JOBS).map(([id,j])=>{const missing=j.req.filter(x=>!hasScamGear(x));const chance=clamp(j.success+(player.scam?.rep||0)*.35-player.heat*4,20,94);return `<div class="job-card ${j.tier>=4?'black':j.tier>=3?'red':j.tier>=2?'yellow':'green'}"><div class="job-banner"><span>${escapeHtml(j.name)}</span><span>TIER ${j.tier}</span></div><div class="job-metrics"><div><span>SUCCESS</span><strong>${Math.round(chance)}%</strong></div><div><span>PAYOUT</span><strong>${money(j.cash[0])}–${money(j.cash[1])}</strong></div><div><span>HEAT</span><strong>+${j.heat}★</strong></div><div><span>TIME</span><strong>${j.minutes[0]}–${j.minutes[1]}m</strong></div></div><div class="job-reqs"><span>${missing.length?'Missing: '+missing.map(x=>SCAM_GEAR[x].name).join(', '):'Equipment ready'}</span></div><div class="job-action">${btn('Run Play',`fraudJob:${id}`,missing.length?'Get required gear first':'Abstract fictional game roll',missing.length?'':'primary')}</div></div>`}).join('');return `${back()}<div class="card"><div class="hero-kicker">SCAM CAREER</div><h2>Digital & Paper Motion</h2><div class="muted">Build equipment, reputation and access. Jobs are fictionalized game abstractions—requirements, odds, payout, Heat and consequences.</div><div class="status-grid">${stat('Scam Rep',player.scam?.rep||0)}${stat('Career Jobs',player.scam?.jobs||0)}${stat('Tools',(player.scam?.gear||[]).length)}${stat('Heat',stars(player.heat))}</div></div><div class="section-title">CAREER JOBS</div><div class="job-list">${jobs}</div><div class="section-title">BLACK-MARKET TOOLS</div><div class="list">${gear}</div>`}
@@ -931,9 +903,65 @@ function renderVehicles(){
  <div class="section-title">VEHICLE MARKET</div><div class="list">${Object.entries(VEHICLES).filter(([id])=>!player.vehicles.includes(id)).map(([id,v])=>{const q=purchaseQuote(v.price);return `<div class="item"><div class="item-head"><span>${v.name}</span><span>${money(q.total)}</span></div><div class="item-meta">Speed ${Math.round((1-v.speed)*100)} · Storage ${v.storage} · Attention ${v.attention} · Reliability ${v.reliability}% · City Tax ${money(q.tax)}</div>${btn('Buy Vehicle',`buyVehicle:${id}`,'','primary')}</div>`}).join('')}</div>`;
 }
 function renderProperties(){
- const owned=player.properties.map(id=>{const p=PROPERTIES[id],e=PROPERTY_ECONOMY[id],avg=Math.round(((e?.income?.[0]||0)+(e?.income?.[1]||0))/2),net=avg-(e?.upkeep||0);return `<div class="item"><div class="item-head"><span>${p.name}</span><span>${p.type}</span></div><div class="item-meta">Income ${money(e?.income?.[0]||0)}–${money(e?.income?.[1]||0)}/day · Upkeep ${money(e?.upkeep||0)}/day · Est. Net ${net>=0?'+':''}${money(net)}/day</div><div class="notice good"><strong>BENEFIT:</strong> ${e?.perk||'Property progression.'}</div></div>`}).join('');
- const market=Object.entries(PROPERTIES).filter(([id])=>!player.properties.includes(id)).map(([id,p])=>{const e=PROPERTY_ECONOMY[id],q=purchaseQuote(p.price),avg=Math.round(((e?.income?.[0]||0)+(e?.income?.[1]||0))/2),net=avg-(e?.upkeep||0);return `<div class="item"><div class="item-head"><span>${p.name}</span><span>${money(q.total)}</span></div><div class="item-meta">${p.type} · Income ${money(e?.income?.[0]||0)}–${money(e?.income?.[1]||0)}/day · Upkeep ${money(e?.upkeep||0)}/day · Est. Net ${net>=0?'+':''}${money(net)}/day · City Tax ${money(q.tax)}</div><div class="notice good"><strong>BENEFIT:</strong> ${e?.perk||'Property progression.'}</div>${btn('Buy Property',`buyProperty:${id}`,'','primary')}</div>`}).join('');
- return `${back()}<div class="card"><div class="section-title">PROPERTY BENEFITS</div><div class="muted">Not every property is passive income. Homes are utility/status assets; garage, traps, warehouse and business front are designed to create value. Income properties now have positive expected net income.</div></div><div class="section-title">OWNED LOCATIONS</div><div class="list">${owned}</div><div class="section-title">PROPERTY MARKET</div><div class="list">${market}</div>`;
+ return `${back()}<div class="card"><div class="section-title">OWNED LOCATIONS</div>${player.properties.map(id=>`<div class="item"><div class="item-head"><span>${PROPERTIES[id].name}</span><span>${PROPERTIES[id].type}</span></div><div class="item-meta">Storage +${PROPERTIES[id].storage} · Security +${PROPERTIES[id].security} · Status +${PROPERTIES[id].status} · Daily income ${money(PROPERTY_ECONOMY[id]?.income?.[0]||0)}–${money(PROPERTY_ECONOMY[id]?.income?.[1]||0)} · Upkeep ${money(PROPERTY_ECONOMY[id]?.upkeep||0)}</div></div>`).join('')}</div>
+ <div class="section-title">PROPERTY MARKET</div><div class="list">${Object.entries(PROPERTIES).filter(([id])=>!player.properties.includes(id)).map(([id,p])=>{const q=purchaseQuote(p.price);return `<div class="item"><div class="item-head"><span>${p.name}</span><span>${money(q.total)}</span></div><div class="item-meta">${p.type} · Storage +${p.storage} · Security +${p.security} · Status +${p.status} · Income ${money(PROPERTY_ECONOMY[id]?.income?.[0]||0)}–${money(PROPERTY_ECONOMY[id]?.income?.[1]||0)}/day · Upkeep ${money(PROPERTY_ECONOMY[id]?.upkeep||0)}/day · City Tax ${money(q.tax)}</div>${btn('Buy Property',`buyProperty:${id}`,'','primary')}</div>`}).join('')}</div>`;
+}
+
+
+function myControlledZones(){const c=fmBackend.playerCrew;return !c?[]:(fmBackend.crewTerritories||[]).filter(t=>t.owner_crew_id===c.crew_id).map(t=>t.zone_key)}
+function territoryBonusPercent(type){
+ const zones=myControlledZones();let n=0;
+ zones.forEach(id=>{
+  const z=TERRITORY_ZONES[id];
+  if(!z)return;
+  if(type==='property'&&id==='apartments_zone')n+=z.bonus_value||0;
+  if(type==='street'&&id==='southside')n+=z.bonus_value||0;
+  if(type==='job'&&id==='restricted_zone')n+=z.bonus_value||0;
+ });
+ return n;
+}
+
+function workJob(){return player?.employment?.current_job?LEGIT_JOBS[player.employment.current_job]||null:null}
+function currentWorkTier(job=workJob()){if(!job)return null;let t=job.promotions[0];for(const x of job.promotions)if((player.employment.shifts_worked||0)>=x.shifts)t=x;return t}
+function nextWorkTier(job=workJob()){return job?job.promotions.find(x=>x.shifts>(player.employment.shifts_worked||0))||null:null}
+function workShiftPay(job=workJob()){return currentWorkTier(job)?.pay||job?.base_pay||0}
+function canClockIn(){
+ const j=workJob();if(!j)return{ok:false,msg:'You do not have a job.'};
+ if(player.equipped_weapon)return{ok:false,msg:'Management noticed the weapon. Unequip it before reporting to work.'};
+ if(j.requires_vehicle&&!player.active_vehicle)return{ok:false,msg:'This job requires an active vehicle.'};
+ if(player.employment.last_shift_day===player.day)return{ok:false,msg:'You already worked today.'};
+ if(player.time<j.start-60)return{ok:false,msg:`Your shift does not start until ${formatTime(j.start)}.`};
+ if(player.time>j.start+30)return{ok:false,msg:'You missed the 30-minute clock-in grace window for this shift.'};
+ return{ok:true};
+}
+function workEvent(){const a=['Your manager noticed you actually showed up prepared.','A coworker called out. Of course they did.','Something broke and everybody stared at it.','A customer asked for the manager.','Nothing caught fire. Great shift.','Management discovered you own free time.'];return a[randInt(0,a.length-1)]}
+function applyWorkMilestone(job,oldN,newN){const lines=[];for(const t of job.promotions)if(t.shifts>oldN&&t.shifts<=newN){if(t.bonus){player.employment.pending_pay+=t.bonus;lines.push(`Seniority bonus: +${money(t.bonus)} pending pay`)}if(t.shifts>0)lines.push(`Promotion: ${t.title} · ${money(t.pay)}/shift`)}return lines}
+function paydayIfDue(){const e=player.employment;if(!e||e.pending_pay<=0)return[];if(!(player.day%7===6||player.day-e.last_payday_day>=7))return[];const a=Math.floor(e.pending_pay);player.bank_cash=(player.bank_cash||0)+a;player.stats.total_earned+=a;player.stats.legit_pay_earned=(player.stats.legit_pay_earned||0)+a;e.pending_pay=0;e.week_shifts=0;e.last_payday_day=player.day;player.messages.unshift({from:'Payroll',text:`Payday deposit: ${money(a)}.`,day:player.day});return[`PAYDAY: ${money(a)} deposited to Emergency Fund.`]}
+function processMissedWorkDay(){const j=workJob();if(!j||player.employment.last_shift_day===player.day||player.time<j.start+j.duration)return[];player.employment.missed_shifts++;player.employment.writeups++;player.work_rep=Math.max(0,(player.work_rep||0)-2);const lines=[`MISSED SHIFT: ${j.company}`,`Write-ups: ${player.employment.writeups}/3`];if(player.employment.writeups>=3){player.employment.employment_history.unshift({company:j.company,title:currentWorkTier(j)?.title||j.title,shifts:player.employment.shifts_worked||0,status:'Fired'});player.messages.unshift({from:`${j.company} HR`,text:'After careful consideration, we have decided to promote you to customer.',day:player.day});player.employment.current_job=null;player.employment.writeups=0;player.employment.shifts_worked=0;lines.push('FIRED: Promoted to customer.')}return lines}
+function streetTemptationMessage(){if(!workJob()||Math.random()>.35)return null;const a=['You really finna work 9 hours for that check? I got something faster.','That whole week check could be one good night. Hit me back.','HR got you working hard. The city pays different after dark.'];const t=a[randInt(0,a.length-1)];player.messages.unshift({from:'Unknown Number',text:t,day:player.day});return t}
+
+function dailyExpenseEstimate(){
+ let n=0;
+ player.properties.forEach(id=>n+=(PROPERTY_ECONOMY[id]?.upkeep||0));
+ player.vehicles.forEach(id=>n+=(VEHICLE_UPKEEP[id]||0));
+ player.crew.forEach(id=>n+=(CREW_UPKEEP[id]||0));
+ n+=(PHONE_UPKEEP[player.phone_id]||0);
+ return Math.max(0,Math.floor(n));
+}
+function propertyIncomeEstimate(){
+ let lo=0,hi=0;
+ player.properties.forEach(id=>{const a=PROPERTY_ECONOMY[id]?.income||[0,0];lo+=a[0];hi+=a[1]});
+ return [lo,hi];
+}
+
+function renderEmployment(){
+ const e=player.employment,j=workJob();
+ if(!j){
+  const list=Object.entries(LEGIT_JOBS).map(([id,x])=>`<div class="employment-card"><div class="job-banner"><span>${escapeHtml(x.company)}</span><span class="difficulty green">LEGIT</span></div><div class="employment-copy"><strong>${escapeHtml(x.title)}</strong><p>${escapeHtml(x.description)}</p></div><div class="job-metrics"><div><span>START</span><strong>${formatTime(x.start)}</strong></div><div><span>SHIFT</span><strong>${Math.round(x.duration/60)} hrs</strong></div><div><span>PAY</span><strong>${money(x.base_pay)}</strong></div><div><span>PAYDAY</span><strong>Weekly</strong></div></div>${x.requires_vehicle?'<div class="notice warning">Requires an active vehicle.</div>':''}<div class="job-action">${btn('Take Job',`takeLegitJob:${id}`,'','primary')}</div></div>`).join('');
+  return `${back()}<div class="section-title">EMPLOYMENT</div><div class="card corporate-card"><div class="hero-kicker">MOTIONWORKS CAREER PORTAL</div><h2>Find Your Next Underpaid Opportunity</h2><div class="muted">Legit work is safer, pays weekly, builds Work Rep and can cool Heat. Every shift begins at or after the 8:00 AM day start.</div></div><div class="employment-list">${list}</div>`;
+ }
+ const t=currentWorkTier(j),n=nextWorkTier(j),c=canClockIn();
+ return `${back()}<div class="card corporate-card"><div class="hero-kicker">CURRENT EMPLOYER</div><h2>${escapeHtml(j.company)}</h2><div class="muted">${escapeHtml(t.title)} · ${money(workShiftPay(j))}/shift · Weekly payday</div></div><div class="dashboard-grid">${profileStat('Completed Shifts',e.shifts_worked)}${profileStat('Pending Pay',money(e.pending_pay))}${profileStat('Work Rep',player.work_rep||0)}${profileStat('Write-ups',`${e.writeups}/3`)}</div><div class="card"><div class="section-title">NEXT SHIFT</div><div class="status-grid">${stat('Starts',formatTime(j.start))}${stat('Ends',formatTime(j.start+j.duration))}${stat('Length',`${Math.round(j.duration/60)} hours`)}</div><div class="notice ${c.ok?'good':'warning'}">${escapeHtml(c.ok?'You can clock in now.':c.msg)}</div>${player.equipped_weapon?btn(player.active_vehicle&&player.active_vehicle!=='bicycle'?`Leave Weapon in ${vehicleName()}`:'Unequip Weapon for Work','stowWeaponForWork','Keeps the weapon in your inventory but removes it from your active loadout','good'):''}${btn('CLOCK IN','clockInLegit','',c.ok?'primary':'')}</div><div class="card"><div class="section-title">SENIORITY</div><div class="item-meta">${n?`${n.shifts-e.shifts_worked} more shifts until ${n.title} · ${money(n.pay)}/shift${n.bonus?` · ${money(n.bonus)} bonus`:''}`:'Top promotion reached.'}</div></div><div class="card"><div class="section-title">COMPANY POLICY</div><div class="result-line">No equipped weapons while clocked in.</div><div class="result-line">Three write-ups can get you fired.</div><div class="result-line">Pay is deposited weekly.</div>${btn('Quit Job','quitLegitJob','','danger')}</div>`;
 }
 
 function renderBank(){
@@ -1021,11 +1049,11 @@ function renderTutorial(){
 }
 function renderWhatsNew(){
  const og=player.og_reward_eligible&&!player.og_reward_claimed?`<div class="card og-card"><div class="hero-kicker">MESSAGE FROM THE OWNER</div><h2>YOU SURVIVED THE EARLY BUILDS 😂</h2><div class="tutorial-copy">You made it through the ugly builds, broken buttons, questionable balance and whatever the hell Alpha was doing back then. Appreciate you being here through the first waves of Federal Motion. $10,000 is waiting for you. Enjoy it. Spend wisely. Or don’t. I already know how y’all play.</div>${btn('CLAIM $10,000 OG BONUS','claimOgReward','','good')}</div>`:'';
- return `<div class="card tutorial-card"><div class="hero-kicker">NEW IN ALPHA 0.8.6</div><h2>CITY CONSEQUENCES</h2><div class="result-lines"><div class="result-line">🚔 Heat now escalates into traffic stops, searches, warrants, surveillance, raids and arrests. 5★ never blocks a move.</div><div class="result-line">🪪 Driver and carry licenses now affect police encounters.</div><div class="result-line">💻 Scam Career is now a progression lane with equipment, reputation and higher-tier fictional plays.</div><div class="result-line">📱 Phone Alerts track police pressure, work, city events and important changes.</div><div class="result-line">🎯 Daily + weekly objectives now pay claimable rewards.</div><div class="result-line">🚗 Vehicle reliability/repair and deeper property benefits are part of city progression.</div><div class="result-line">🕵️ Heat now builds a separate Investigation / Case meter that can lead to warrants and raids.</div><div class="result-line">⚖️ Arrests now open Booking with bond, jail time and lawyer choices.</div><div class="result-line">🏠 Property cards now show income, upkeep, estimated net and actual benefits.</div><div class="result-line">🗺️ City Map locations now connect to gameplay instead of being travel-only.</div></div><div class="actions">${btn('SHOW WALKTHROUGH','whatsNewTutorial','','back')}${btn('ENTER CITY','whatsNewDone','','primary')}</div></div>${og}`;
+ return `<div class="card tutorial-card"><div class="hero-kicker">NEW IN ALPHA 0.8.1</div><h2>FLOW FIX</h2><div class="result-lines"><div class="result-line">🚔 Heat now escalates into traffic stops, searches, warrants, surveillance, raids and arrests. 5★ never blocks a move.</div><div class="result-line">🪪 Driver and carry licenses now affect police encounters.</div><div class="result-line">💻 Scam Career is now a progression lane with equipment, reputation and higher-tier fictional plays.</div><div class="result-line">📱 Phone Alerts track police pressure, work, city events and important changes.</div><div class="result-line">🎯 Daily + weekly objectives now pay claimable rewards.</div><div class="result-line">🚗 Vehicle reliability/repair and deeper property benefits are part of city progression.</div></div><div class="actions">${btn('SHOW WALKTHROUGH','whatsNewTutorial','','back')}${btn('ENTER CITY','whatsNewDone','','primary')}</div></div>${og}`;
 }
 const PATCH_NOTES_HISTORY=[
  {version:'Alpha 0.8.5',title:'ECONOMY LADDER',notes:['Successful street sales now always clear acquisition cost','Drug profit ceilings rise by tier with Heroin highest','Scam Career payouts now rise sharply by tier with the final play highest','Quick Moves and major crimes have clearer risk/reward ladders','Higher requirements, capital and danger now lead to higher earning ceilings']},
- {version:'Alpha 0.8.6',title:'CITY CONSEQUENCES',notes:['Escalating police pressure: stops, searches, warrants, raids and arrests','Driver and carry licenses','Scam Career equipment + reputation progression','Phone alerts','Daily and weekly objectives','Vehicle reliability and property utility','One-time OG appreciation reward for returning players']},
+ {version:'Alpha 0.8.1',title:'FLOW FIX',notes:['Escalating police pressure: stops, searches, warrants, raids and arrests','Driver and carry licenses','Scam Career equipment + reputation progression','Phone alerts','Daily and weekly objectives','Vehicle reliability and property utility','One-time OG appreciation reward for returning players']},
  {
   version:'Alpha 0.7',
   title:'CITY SYSTEMS + TUTORIAL UPDATE',
@@ -1151,7 +1179,7 @@ function renderOwnerWallet(){
  <div class="dashboard-grid">
   <div class="dash-card"><span>SPENDABLE BALANCE</span><strong>${money(b.balance||0)}</strong></div>
   <div class="dash-card"><span>LIFETIME MOTION TAX</span><strong>${money(b.total_tax_collected||0)}</strong></div>
-  <div class="dash-card"><span>PLAYER LOSSES / SEIZURES</span><strong>${money(b.player_losses_collected||0)}</strong></div>
+  <div class="dash-card"><span>PLAYER LOSSES COLLECTED</span><strong>${money(b.player_losses_collected||0)}</strong></div>
   <div class="dash-card"><span>UPKEEP & BILLS COLLECTED</span><strong>${money(b.upkeep_bills_collected||0)}</strong></div>
   <div class="dash-card"><span>TAX EVENTS</span><strong>${Number(b.total_tax_events||0).toLocaleString()}</strong></div>
   <div class="dash-card"><span>PLAYER LOSS EVENTS</span><strong>${Number(b.player_loss_events||0).toLocaleString()}</strong></div>
@@ -1398,20 +1426,6 @@ function riskItemsForMove(m){
 }
 
 function requirement(m){if(player.level<(m.requires_level||1))return `Requires Level ${m.requires_level}`;if(m.requires_weapon&&!player.equipped_weapon)return 'Weapon required';if(m.weapon_tier&&currentWeaponTier()<m.weapon_tier)return `Requires Weapon Tier ${m.weapon_tier}+`;if(player.crew.length<(m.requires_crew||0))return `Requires ${m.requires_crew} crew member(s)`;return''}
-function renderBooking(){
- const c=player.legal_case;if(!c)return `${back()}<div class="card">No active booking.</div>`;
- const lawyers=[['public','Public Defender',0,'Baseline outcome.'],['street','Street Attorney',2500,'Small reduction to bond/jail exposure.'],['firm','Defense Firm',10000,'Strong reduction to bond/jail exposure.'],['elite','Elite Counsel',30000,'Best legal modifier, never a guarantee.']];
- const lawyerRows=lawyers.map(([id,name,cost,desc])=>`<div class="item"><div class="item-head"><span>${name}</span><span>${cost?money(cost):'FREE'}</span></div><div class="item-meta">${desc}</div>${btn(c.lawyer===id?'SELECTED':'Hire / Select',`legalLawyer:${id}`,'',c.lawyer===id?'':'primary')}</div>`).join('');
- return `<div class="card risk-confirm"><div class="risk-kicker">ARREST / BOOKING</div><h2>${caseStatus().toUpperCase()}</h2><div class="status-grid">${stat('Cash Seized',money(c.seizedCash||0))}${stat('Bond',money(c.bond||0))}${stat('Jail Exposure',`${c.jailDays||0} days`)}${stat('Investigation',`${Math.round(player.investigation||0)}%`)}</div><div class="muted">Emergency Fund can be used for bond and lawyer costs. Seized cash is gone immediately.</div></div><div class="section-title">LEGAL OPTIONS</div><div class="list">${lawyerRows}</div><div class="actions">${btn('PAY BOND',`legalBond`,'Release now; case remains active.','good')}${btn('SERVE TIME',`legalJail`,'Advance game days and take the sentence.','danger')}</div>`;
-}
-function lawyerModifier(){const id=player.legal_case?.lawyer;return id==='elite'?.45:id==='firm'?.30:id==='street'?.15:0}
-function payLegalCost(amount){const x=takeAvailableCash(Math.max(0,Math.round(amount)));return x.unpaid===0}
-function resolveBooking(kind){const c=player.legal_case;if(!c)return;const mod=lawyerModifier();if(kind==='bond'){
-  const bond=Math.max(250,Math.round(c.bond*(1-mod*.45)));if(!payLegalCost(bond)){result('BOND DENIED',[`Need ${money(bond)} available between cash, trap cash and Emergency Fund.`],'booking');return}
-  player.legal_case=null;player.active_case='Released on Bond';player.location='trap';player.time=DAY_START;player.heat=Math.max(2,player.heat-1);player.investigation=Math.max(20,Math.round((player.investigation||0)*.82));saveGame();result('RELEASED ON BOND',[`Bond paid: -${money(bond)}`,`Case remains active: ${caseStatus()}`,`Investigation: ${Math.round(player.investigation)}%`],'home');return;
- }
- const days=Math.max(1,Math.round(c.jailDays*(1-mod)));player.day+=days;player.time=DAY_START;player.location='trap';player.heat=Math.max(1,player.heat-2);player.investigation=Math.max(5,Math.round((player.investigation||0)*.55));player.warrants=0;player.legal_case=null;player.active_case='Sentence Served';player.respect=Math.max(0,player.respect-randInt(1,4));resetDaily();generateMarket();saveGame();result('RELEASED',[`Jail time served: ${days} day(s)`,`Case pressure reduced to ${Math.round(player.investigation)}%.`],'home');
-}
 function result(title,lines,returnTo=null){
  const origin=(returnTo || actionOriginScreen || (screen && screen!=='result' ? screen : 'home'));
  checkAchievements();
@@ -1530,14 +1544,7 @@ function performMove(id){
  }
 }
 function hospitalRespawn(){const cash=player.cash_on_person;player.cash_on_person=0;if(cash>0)queueOwnerLoss(cash,'hospital_downed');player.carried_drugs=emptyDrugInventory();let lost=null;if(player.equipped_weapon){lost=weaponName();const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}const x=Math.min(player.xp,Math.max(75,Math.floor(player.xp*.15))),days=randInt(2,5);player.xp-=x;player.day+=days;player.time=DAY_START;player.location='hospital';player.health=65;player.stats.hospital_visits++;addSkillXP('endurance',25);resetDaily();result('YOU WENT DOWN',[`Cash lost from your person: ${money(cash)}`,'Carried inventory lost.',lost?`Weapon lost: ${lost}`:'No equipped weapon lost.',`XP lost: ${x}`,`Time passed: ${days} day(s)`,'Your trap stash and stored cash were untouched.'])}
-function arrestEvent(){
- const severity=clamp(Math.ceil(((player.heat||0)*12+(player.investigation||0))/25),1,5),days=randInt(2+severity,5+severity*3),cash=Math.floor(player.cash_on_person*(.35+severity*.10+Math.random()*.15));
- player.cash_on_person-=cash;if(cash>0)queueOwnerLoss(cash,'arrest_seizure');player.carried_drugs=emptyDrugInventory();
- if(player.equipped_weapon&&Math.random()<.75){const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}
- player.stats.arrests++;player.investigation=clamp((player.investigation||0)+severity*5,0,100);player.warrants=Math.max(player.warrants||0,severity>=3?1:0);
- const bond=Math.round((750+severity*1750+(player.investigation||0)*120)/250)*250;
- player.legal_case={severity,jailDays:days,bond,seizedCash:cash,lawyer:'public'};player.active_case=caseStatus();saveGame();screen='booking';render();
-}
+function arrestEvent(){const days=randInt(4,12),cash=Math.floor(player.cash_on_person*(.50+Math.random()*.40));player.cash_on_person-=cash;if(cash>0)queueOwnerLoss(cash,'arrest_seizure');player.carried_drugs=emptyDrugInventory();if(player.equipped_weapon&&Math.random()<.75){const i=player.weapon_inventory.findIndex(x=>x.id===player.equipped_weapon);if(i>=0)player.weapon_inventory.splice(i,1);player.equipped_weapon=null}player.day+=days;player.time=DAY_START;player.location='trap';player.heat=Math.max(1,player.heat-2);player.respect=Math.max(0,player.respect-randInt(1,4));player.stats.arrests++;resetDaily();generateMarket();result('BUSTED',[`Jail time: ${days} days`,`Cash seized: ${money(cash)}`,'Carried inventory seized.','Stored trap stash remains separate.'])}
 function lateNightEvent(){const severity=Math.max(1,Math.floor((player.time-DAY_END)/30)+1),danger=Math.min(90,25+severity*10+player.heat*8);if(randInt(1,100)>danger){player.location='trap';forcedEndDay(['You got lucky and made it back.']);return}const o=['robbed','arrested','injured'][randInt(0,2)];if(o==='arrested'){arrestEvent();return}if(o==='robbed'){const c=player.cash_on_person;player.cash_on_person=0;if(c>0)queueOwnerLoss(c,'late_night_robbery');player.carried_drugs=emptyDrugInventory();player.location='trap';forcedEndDay([`Caught slipping after 2:00 AM.`,`Lost carried cash: ${money(c)}`,'Lost carried inventory.']);return}player.health-=randInt(25,55);if(player.health<=0){hospitalRespawn();return}player.location='trap';forcedEndDay([`You made it back hurt. Health: ${player.health}/100`])}
 function totalTrapValue(){let v=player.trap.cash;Object.entries(player.trap.drug_stash).forEach(([id,g])=>v+=Math.floor(g*DRUGS[id].base_value));player.trap.weapons.forEach(x=>v+=WEAPONS[x.id]?.price||0);return v}
 function overnightEventLines(){const s=player.trap.security,a=player.trap.attention,v=totalTrapValue();let risk=5+Math.floor(a/4)+player.heat*5+Math.min(20,Math.floor(v/1000))-s*6;risk=clamp(risk,3,70);if(randInt(1,100)>risk){player.trap.attention=Math.max(0,player.trap.attention-randInt(3,8));return['Quiet night. Nothing major happened.']}const e=['robbery','pressure','damage'][randInt(0,2)],lines=[];if(e==='robbery'){lines.push('Somebody hit the trap overnight.');const loss=Math.min(player.trap.cash,randInt(0,Math.max(50,Math.floor(player.trap.cash/3)+1)));player.trap.cash-=loss;if(loss){queueOwnerLoss(loss,'trap_robbery');lines.push(`Cash stolen: ${money(loss)}`);}player.trap.condition=Math.max(0,player.trap.condition-1)}else if(e==='pressure'){player.heat=clamp(player.heat+1,0,5);lines.push('Heavy pressure overnight.','Heat: +1★')}else{player.trap.condition=Math.max(0,player.trap.condition-1);lines.push('Something got damaged at the trap.','Trap Condition: -1')}player.trap.attention=Math.max(0,player.trap.attention-randInt(3,8));return lines}
@@ -1558,7 +1565,7 @@ function collectPropertyIncome(){
   if(player.trap.attention>=75)amount=Math.floor(amount*.65);
   if(player.bills_due>500)amount=Math.floor(amount*.8);
   const zoneBonus=territoryBonusPercent('property');if(zoneBonus>0)amount=Math.floor(amount*(1+zoneBonus/100));
-  total+=amount;if(id==='business_front')player.clean_income=(player.clean_income||0)+amount;
+  total+=amount;
   if(amount>0)lines.push(`${p.name}: +${money(amount)}`);
  });
  if(total>0){
@@ -1639,9 +1646,6 @@ function endDay(){
  const expenses=chargeDailyExpenses();
  const event=cityLifeRandomEvent();
  const police=policeCheck('Overnight police pressure');
- if(player.heat===0)player.investigation=Math.max(0,(player.investigation||0)-3);else player.investigation=Math.max(0,(player.investigation||0)-1);
- if(player.properties.includes('apartment'))player.trap.attention=Math.max(0,player.trap.attention-5);
- if(player.properties.includes('luxury_home')&&player.day%3===0)player.respect+=1;
 
  player.day++;
  player.time=DAY_START;
@@ -1855,7 +1859,7 @@ function handle(action){
  if(action==='claimOgReward'){if(player.og_reward_eligible&&!player.og_reward_claimed){player.cash_on_person+=10000;player.stats.total_earned+=10000;player.og_reward_claimed=true;addActivity('Claimed Alpha 0.8 OG appreciation bonus');saveGame();result('OG BONUS CLAIMED',['From the owner: appreciate you riding through the early waves. 😂','Cash: +$10,000','Enjoy it. Spend wisely. Or don’t.'])}return}
  if(action.startsWith('buyLicense:')){const id=action.split(':')[1],x=LICENSES[id];if(!x||player.licenses[id])return;if(player.cash_on_person<x.price){result('LICENSE OFFICE',[`Need ${money(x.price)}.`]);return}player.cash_on_person-=x.price;player.licenses[id]=true;saveGame();result('LICENSE ISSUED',[x.name,`Cost: -${money(x.price)}`],'licenses');return}
  if(action.startsWith('buyScamGear:')){const id=action.split(':')[1],g=SCAM_GEAR[id];if(!g||hasScamGear(id))return;const c=taxedPurchase(g.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`],'scamCareer');return}player.scam.gear.push(id);saveGame();result('TOOL ACQUIRED',[g.name,`Total: -${money(c.total)}`],'scamCareer');return}
- if(action.startsWith('fraudJob:')){const id=action.split(':')[1],j=FRAUD_JOBS[id];if(!j)return;const missing=j.req.filter(x=>!hasScamGear(x));if(missing.length){result('EQUIPMENT REQUIRED',[...missing.map(x=>SCAM_GEAR[x].name)],'scamCareer');return}const chance=clamp(j.success+(player.scam.rep||0)*.35-player.heat*4,20,94);advanceTime(randInt(...j.minutes));if(screen==='result')return;player.scam.jobs++;player.daily.fraud_jobs=(player.daily.fraud_jobs||0)+1;player.weekly.fraud_jobs=(player.weekly.fraud_jobs||0)+1;if(randInt(1,100)<=chance){const pay=randInt(...j.cash);player.cash_on_person+=pay;player.stats.total_earned+=pay;player.daily.earned=(player.daily.earned||0)+pay;player.weekly.earned=(player.weekly.earned||0)+pay;player.scam.rep+=randInt(2,5);player.heat=clamp(player.heat+j.heat,0,5);addInvestigation(j.tier*3+j.heat*2,'Scam career');const police=policeCheck('Scam career');saveGame();result('PLAY HIT',[`${j.name}: +${money(pay)}`,`Scam Rep: ${player.scam.rep}`,`Heat: +${j.heat}★`,...police],'scamCareer')}else{player.heat=clamp(player.heat+j.heat,0,5);addInvestigation(j.tier*4+j.heat*3,'Failed scam career job');const police=policeCheck('Failed scam career job');saveGame();result('PLAY BURNED',[`${j.name} failed.`,`Heat: +${j.heat}★`,...police],'scamCareer')}return}
+ if(action.startsWith('fraudJob:')){const id=action.split(':')[1],j=FRAUD_JOBS[id];if(!j)return;const missing=j.req.filter(x=>!hasScamGear(x));if(missing.length){result('EQUIPMENT REQUIRED',[...missing.map(x=>SCAM_GEAR[x].name)],'scamCareer');return}const chance=clamp(j.success+(player.scam.rep||0)*.35-player.heat*4,20,94);advanceTime(randInt(...j.minutes));if(screen==='result')return;player.scam.jobs++;player.daily.fraud_jobs=(player.daily.fraud_jobs||0)+1;player.weekly.fraud_jobs=(player.weekly.fraud_jobs||0)+1;if(randInt(1,100)<=chance){const pay=randInt(...j.cash);player.cash_on_person+=pay;player.stats.total_earned+=pay;player.daily.earned=(player.daily.earned||0)+pay;player.weekly.earned=(player.weekly.earned||0)+pay;player.scam.rep+=randInt(2,5);player.heat=clamp(player.heat+j.heat,0,5);const police=policeCheck('Scam career');saveGame();result('PLAY HIT',[`${j.name}: +${money(pay)}`,`Scam Rep: ${player.scam.rep}`,`Heat: +${j.heat}★`,...police],'scamCareer')}else{player.heat=clamp(player.heat+j.heat,0,5);const police=policeCheck('Failed scam career job');saveGame();result('PLAY BURNED',[`${j.name} failed.`,`Heat: +${j.heat}★`,...police],'scamCareer')}return}
  if(action.startsWith('claimObj:')){const [,kind,idx]=action.split(':');claimObjective(kind,Number(idx));return}
  if(action==='sleep'){endDay();return}
  if(action.startsWith('doMove:')){
@@ -1896,10 +1900,10 @@ function handle(action){
     player.carried_drugs[id]-=g;player.cash_on_person+=pay;player.stats.total_earned+=pay;
     const xp=Math.min(1800,Math.max(15,Math.floor(45*Math.sqrt(g))));player.xp+=xp;
     const bulkHeat=g>=2000?2:g>=500?1:0;const riskHeat=(randInt(1,100)<=d.risk*10?1:0);const heatGain=Math.min(3,bulkHeat+riskHeat);
-    player.heat=clamp(player.heat+heatGain,0,5);player.stats.successful_moves++;player.daily.successes++;addInvestigation(Math.max(1,d.risk*2+Math.floor(g/750)),'Street trafficking');const police=policeCheck('Street trafficking');
-    const lvl=updateLevel();result('MOVE SUCCESSFUL',[`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(heatGain?[`Heat: +${heatGain}★`]:[]),`Case: ${caseStatus()} (${Math.round(player.investigation||0)}%)`,...police,...(lvl?[lvl]:[])])
+    player.heat=clamp(player.heat+heatGain,0,5);player.stats.successful_moves++;player.daily.successes++;
+    const lvl=updateLevel();result('MOVE SUCCESSFUL',[`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(heatGain?[`Heat: +${heatGain}★`]:[]),...(lvl?[lvl]:[])])
   }else{
-    player.stats.failed_moves++;player.daily.failures++;const heatGain=g>=1000?2:1;player.heat=clamp(player.heat+heatGain,0,5);addInvestigation(Math.max(2,d.risk*3+Math.floor(g/500)),'Failed street move');const police=policeCheck('Failed street move');result('MOVE WENT BAD',['The opportunity fell apart.','No inventory was lost.',`Heat: +${heatGain}★`,`Case: ${caseStatus()} (${Math.round(player.investigation||0)}%)`,...police])
+    player.stats.failed_moves++;player.daily.failures++;const heatGain=g>=1000?2:1;player.heat=clamp(player.heat+heatGain,0,5);result('MOVE WENT BAD',['The opportunity fell apart.','No inventory was lost.',`Heat: +${heatGain}★`])
   }return
 }
  if(action.startsWith('buyWeapon:')){const id=action.split(':')[1],w=WEAPONS[id],c=taxedPurchase(w.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including City Tax.`]);return}player.weapon_inventory.push({id,condition:w.condition,upgrades:0});advanceTime(30);result('PURCHASE COMPLETE',[`Purchased ${w.name}.`,`Base: -${money(c.base)}`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
@@ -1907,14 +1911,9 @@ function handle(action){
  if(action.startsWith('buyPhone:')){const id=action.split(':')[1],p=PHONES[id];if(PHONES[player.phone_id].tier>=p.tier)return;const c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.phone_id=id;addSkillXP('business',10);result('PHONE UPGRADED',[`New phone: ${p.name}`,`City Tax: -${money(c.tax)}`,`Apps unlocked: ${p.apps.join(', ')}`]);return}
  if(action==='equipGo'){const wi=$('#equipWeapon').value,ai=$('#equipArmor').value;player.equipped_weapon=wi===''?null:player.weapon_inventory[Number(wi)].id;player.equipped_armor=ai===''?null:player.armor_inventory[Number(ai)];result('GEAR EQUIPPED',[`Weapon: ${weaponName()}`,`Armor: ${armorName()}`],'equip');return}
  if(action.startsWith('hire:')){const id=action.split(':')[1],c=CREW[id];travelTo('crew_spot');if(screen==='result')return;const charge=taxedPurchase(c.price);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)}.`]);return}player.crew.push(id);addSkillXP('charisma',15);advanceTime(45);result('CREW UPDATED',[`${c.name} joined as ${c.role}.`,`City Tax: -${money(charge.tax)}`]);return}
- if(action.startsWith('locationAction:')){const id=action.split(':')[1],a=locationAction(id);if(!a)return;screen=a[1];render();return}
- if(action.startsWith('legalLawyer:')){const id=action.split(':')[1],cost={public:0,street:2500,firm:10000,elite:30000}[id];if(!player.legal_case)return;if(cost&&!payLegalCost(cost)){result('LEGAL COUNSEL',[`Need ${money(cost)} available between cash, trap cash and Emergency Fund.`],'booking');return}player.legal_case.lawyer=id;saveGame();screen='booking';render();return}
- if(action==='legalBond'){resolveBooking('bond');return}
- if(action==='legalJail'){resolveBooking('jail');return}
- if(action==='noop')return;
  if(action.startsWith('travel:')){const id=action.split(':')[1];if(id===player.location)return;travelTo(id);if(screen==='result')return;result('TRAVEL COMPLETE',[`Arrived at ${LOCATIONS[id].name}.`,`Time: ${formatTime(player.time)}`]);return}
  if(action.startsWith('activeVehicle:')){const id=action.split(':')[1];if(player.vehicles.includes(id)){player.active_vehicle=id;saveGame();screen='vehicles';render()}return}
- if(action.startsWith('repairVehicle:')){const id=action.split(':')[1],cond=player.vehicle_condition?.[id]??100,cost=Math.max(20,Math.round((100-cond)*8*(player.properties.includes('garage_property')?.75:1)));if(player.cash_on_person<cost){result('GARAGE',[`Need ${money(cost)}.`]);return}player.cash_on_person-=cost;player.vehicle_condition[id]=100;saveGame();result('VEHICLE REPAIRED',[`${VEHICLES[id].name} condition restored to 100%.`,`Cost: -${money(cost)}`]);return}
+ if(action.startsWith('repairVehicle:')){const id=action.split(':')[1],cond=player.vehicle_condition?.[id]??100,cost=Math.max(20,Math.round((100-cond)*8));if(player.cash_on_person<cost){result('GARAGE',[`Need ${money(cost)}.`]);return}player.cash_on_person-=cost;player.vehicle_condition[id]=100;saveGame();result('VEHICLE REPAIRED',[`${VEHICLES[id].name} condition restored to 100%.`,`Cost: -${money(cost)}`]);return}
  if(action.startsWith('buyVehicle:')){const id=action.split(':')[1],v=VEHICLES[id],c=taxedPurchase(v.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.vehicles.push(id);player.vehicle_condition[id]=v.reliability;player.active_vehicle=id;result('VEHICLE PURCHASED',[`${v.name} added to your garage.`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action.startsWith('buyProperty:')){const id=action.split(':')[1],p=PROPERTIES[id],c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.properties.push(id);result('PROPERTY PURCHASED',[`${p.name} is now yours.`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action==='bankDeposit'||action==='bankWithdraw'){
@@ -1949,10 +1948,10 @@ function handle(action){
  if(action==='takeWeaponGo'){const i=Number($('#takeWeapon').value);if(Number.isFinite(i)&&player.trap.weapons[i])player.weapon_inventory.push(player.trap.weapons.splice(i,1)[0]);saveGame();screen='stash';render();return}
  if(action.startsWith('upgrade:')){const k=action.split(':')[1];if(player.trap[k]>=5)return;const base={security:500*(player.trap.security+1),storage:400*(player.trap.storage+1),condition:300*(player.trap.condition+1)}[k],c=taxedPurchase(base);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.trap[k]++;advanceTime(60);result('TRAP UPGRADED',[`${k[0].toUpperCase()+k.slice(1)} upgraded to ${player.trap[k]}/5.`,`City Tax: -${money(c.tax)}`]);return}
  if(action==='treat'){if(player.health>=100)return;travelTo('hospital');if(screen==='result')return;const c=Math.max(50,(100-player.health)*8);if(player.cash_on_person<c){result('NOT ENOUGH CASH',[`Treatment costs ${money(c)}.`]);return}player.cash_on_person-=c;player.health=100;advanceTime(120);addSkillXP('endurance',6);result('TREATMENT COMPLETE',['Health restored to 100/100.',`Cash: -${money(c)}`]);return}
- if(action.startsWith('laylow:')){if(player.location!=='trap')return;const mode=action.split(':')[1],layBonus=(player.properties.includes('apartment')?0.15:0)+(player.properties.includes('luxury_home')?0.10:0);if(player.heat<=0){result('ALREADY COLD',['Heat is already at zero.'],'laylow');return}
-  if(mode==='4'){advanceTime(240);const ok=Math.random()<(0.6+layBonus);if(ok)player.heat=Math.max(0,player.heat-1);player.trap.attention=Math.max(0,player.trap.attention-8);player.investigation=Math.max(0,(player.investigation||0)-2);result('LAY LOW',[ok?'Heat: -1★':'Heat did not drop this time.','Trap attention cooled down.'],'laylow');return}
-  if(mode==='8'){advanceTime(480);player.heat=Math.max(0,player.heat-1);player.trap.attention=Math.max(0,player.trap.attention-15);player.investigation=Math.max(0,(player.investigation||0)-4);result('LAY LOW',['Heat: -1★','Trap attention cooled down.'],'laylow');return}
-  if(mode==='day'){const drop=Math.min(player.heat,2);player.heat-=drop;player.trap.attention=Math.max(0,player.trap.attention-25);player.investigation=Math.max(0,(player.investigation||0)-8);player.day++;player.time=DAY_START;player.stats.days_survived++;generateMarket();resetDaily();result('DISAPPEARED FOR THE DAY',[`Heat: -${drop}★`,'A full day passed.','Trap attention dropped.'],'laylow');return}
+ if(action.startsWith('laylow:')){if(player.location!=='trap')return;const mode=action.split(':')[1];if(player.heat<=0){result('ALREADY COLD',['Heat is already at zero.'],'laylow');return}
+  if(mode==='4'){advanceTime(240);const ok=Math.random()<.6;if(ok)player.heat=Math.max(0,player.heat-1);player.trap.attention=Math.max(0,player.trap.attention-8);result('LAY LOW',[ok?'Heat: -1★':'Heat did not drop this time.','Trap attention cooled down.'],'laylow');return}
+  if(mode==='8'){advanceTime(480);player.heat=Math.max(0,player.heat-1);player.trap.attention=Math.max(0,player.trap.attention-15);result('LAY LOW',['Heat: -1★','Trap attention cooled down.'],'laylow');return}
+  if(mode==='day'){const drop=Math.min(player.heat,2);player.heat-=drop;player.trap.attention=Math.max(0,player.trap.attention-25);player.day++;player.time=DAY_START;player.stats.days_survived++;generateMarket();resetDaily();result('DISAPPEARED FOR THE DAY',[`Heat: -${drop}★`,'A full day passed.','Trap attention dropped.'],'laylow');return}
  }
 }
 
