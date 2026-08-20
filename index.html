@@ -3,23 +3,17 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0a0a0a" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
-  <title>Federal Motion — Alpha 0.5</title>
-  <script>
-    const FM_BUILD = Date.now();
-    document.write('<link rel="stylesheet" href="styles.css?v=' + FM_BUILD + '">');
-  </script>
+  <meta name="theme-color" content="#0b0b0d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Federal Motion</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <main id="app" class="app-shell"></main>
+
+  <!-- Supabase powers anonymous cloud saves / profiles / Motion Tax. -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    const fmScript = document.createElement('script');
-    fmScript.src = 'app.js?v=' + FM_BUILD;
-    document.body.appendChild(fmScript);
-  </script>
+  <script src="app.js"></script>
 </body>
 </html>
