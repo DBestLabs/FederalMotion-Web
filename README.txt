@@ -1,62 +1,23 @@
-FEDERAL MOTION — ALPHA 0.7
-==========================
+FEDERAL MOTION — ALPHA 0.8 CITY PRESSURE UPDATE
 
-Federal Motion is an early-access crime/life progression game from DBest Labs. Build your motion from the bottom, manage your time and Heat, earn money through legit work or risky city opportunities, upgrade your gear and rides, build a crew, and fight for territory.
+Federal Motion is an evolving browser-based crime/life progression game. Start at the bottom, manage your time and Heat, build money and reputation, and choose how you move through the city.
 
-ALPHA 0.7 — WHAT'S NEW
-----------------------
-• New-player walkthrough explains the core game systems before entering the city.
-• Returning players receive a one-time What's New alert when an update adds new systems.
-• Legit job schedules now line up with the 8:00 AM start of the game day.
-• Legit base pay, promotion pay, milestone bonuses and attendance rewards were increased.
-• Completing legit shifts can help lower Heat.
-• Quick Moves include clean side work, street opportunities and fictional scam/fraud plays.
-• Repeating the same Quick Move during one day lowers its success odds and each opportunity has a daily limit.
-• Activity History records recent Quick Move results.
+WHAT'S NEW
+- Police pressure now escalates through traffic stops, searches, warrants, surveillance, raids and arrests.
+- 5-star Heat never blocks a move. Higher Heat means higher consequences.
+- Driver and carry licenses can affect police encounters.
+- New Scam Career progression with fictional equipment, reputation and higher-tier abstract jobs.
+- Phone Alerts surface important city pressure and events.
+- Daily and weekly objectives with claimable rewards.
+- Vehicle condition and repairs add more ownership depth.
+- Properties remain part of storage, security, income and status progression.
+- New players receive a protected walkthrough.
+- Returning early-wave players receive a one-time Alpha 0.8 appreciation message and reward.
 
-HOW THE DAY WORKS
------------------
-• Each day starts at 8:00 AM.
-• Actions consume in-game time.
-• Keep an eye on the HUD clock and late-night danger window.
-• Return to your trap before ending the day.
+HOW TO PLAY
+The game day starts at 8:00 AM. Actions and travel use time. Build money through legit work, Quick Moves and other progression paths, manage Heat, use your stash and Cash Reserve, improve equipment and properties, and return home before sleeping.
 
-EMPLOYMENT
-----------
-• Apply for fictional legit jobs through Employment.
-• All scheduled shifts begin at or after 8:00 AM.
-• Clock in during the allowed window and report to work unarmed.
-• Completed shifts build Work Rep and promotion progress.
-• Pay is deposited weekly.
-• Raises and milestone bonuses unlock as more shifts are completed.
-• Consistent attendance can earn extra pay.
-• Missed shifts can create write-ups and repeated attendance problems can get you fired.
-• Clean employment can help cool Heat.
-
-QUICK MOVES
------------
-Quick Moves are shorter opportunities around the city. They range from delivery, moving, detailing, warehouse and courier work to higher-risk fictional street and fraud/scam opportunities. Riskier plays can pay more but bring lower success odds and more Heat.
-
-HEAT & RISK
------------
-Heat runs from 0–5 stars. Higher Heat makes the city harder and can hurt your odds. Clean work and Lay Low can help cool things down. Failed risky moves may cost cash, health, gear or lead to arrest depending on the situation.
-
-GEAR, RIDES & CITY PROGRESSION
-------------------------------
-• Weapons are required for robberies, and larger moves demand stronger preparation.
-• Vehicles can be purchased, equipped and used for travel or job requirements.
-• Upgrade phones to unlock more apps and city tools.
-• Build skills, earn achievements and complete objectives as your character progresses.
-• Properties can provide additional benefits and income while also creating expenses.
-
-CREWS & TERRITORY
------------------
-Players can create or join crews, challenge territory, hold zones and earn gameplay bonuses and rewards. Crew and territory systems become more important as your character grows.
-
-SAVING
-------
-Federal Motion uses local browser saving and supports cloud syncing when CLOUD ONLINE is shown. Existing compatible saves are migrated forward when possible.
-
-ALPHA SOFTWARE
---------------
-Federal Motion is still in active development. Features, balance, UI and progression can change between alpha versions. If something breaks after an update, report what happened and what you were doing immediately before the problem.
+NOTES
+- Save data remains compatible with prior browser saves.
+- The scam/fraud career is fictionalized gameplay and does not provide real-world instructions.
+- This README contains player-facing information only.

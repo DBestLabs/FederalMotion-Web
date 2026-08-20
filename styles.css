@@ -400,3 +400,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.12;ba
 
 /* Alpha 0.7 Quick Moves restore */
 .quick-moves-note{border-color:rgba(112,240,165,.22)}
+
+/* Alpha 0.8 City Pressure */
+.og-card{border-color:#7a6325;background:linear-gradient(160deg,#211b0d,#100e09)}
+.og-card h2{color:#ffe28a}.tutorial-card{border-color:#35533f}.job-reqs{line-height:1.45}

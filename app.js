@@ -11,7 +11,7 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KlgKi5KFxRqrMbGzZIVVSQ_-JM9OlON';
 const DAY_START=8*60, WARNING_TIME=24*60, DAY_END=26*60, MAX_HEAT=5, MAX_HEALTH=100;
 const DEFAULT_MOTION_TAX_RATE=.05;
 
-let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.7',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
+let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
 let player=null, screen='start', payload=null;
 
 const DRUGS={
@@ -155,6 +155,55 @@ const SIDE_HUSTLES={
 };
 
 
+// ===== ALPHA 0.8 CITY PRESSURE =====
+const LICENSES={
+ drivers:{name:"Driver's License",price:180,desc:'Required for normal legal vehicle operation during traffic stops.'},
+ carry:{name:'City Carry Permit',price:650,desc:'Reduces legal trouble from carrying eligible low-tier weapons during a stop.'}
+};
+const SCAM_GEAR={
+ laptop:{name:'Burner Laptop',price:900,tier:1},reader:{name:'Card Reader',price:1250,tier:1},
+ blank_media:{name:'Blank Card Pack',price:500,tier:1},printer:{name:'Document Printer Kit',price:1800,tier:2},
+ access_key:{name:'Omni Access Key',price:3500,tier:3},workstation:{name:'Encrypted Workstation',price:6500,tier:4}
+};
+const FRAUD_JOBS={
+ digital_flip:{name:'Digital Flip',tier:1,minutes:[70,110],cash:[140,300],success:82,heat:1,req:['laptop']},
+ card_cashout:{name:'Card Cashout',tier:1,minutes:[90,140],cash:[260,600],success:70,heat:2,req:['laptop','reader','blank_media']},
+ paper_play:{name:'Bank Paper Job',tier:2,minutes:[120,180],cash:[500,1200],success:58,heat:2,req:['laptop','printer']},
+ atm_cashout:{name:'ATM Cashout',tier:3,minutes:[110,170],cash:[850,1900],success:48,heat:3,req:['laptop','access_key']},
+ account_score:{name:'Account Score',tier:4,minutes:[160,240],cash:[1600,3800],success:38,heat:4,req:['workstation','access_key','printer']}
+};
+const DAILY_OBJECTIVE_POOL=[
+ ['Complete 2 Quick Moves',p=>(p.daily?.hustles_completed||0)>=2],['Work a legit shift',p=>(p.daily?.legit_shifts||0)>=1],
+ ['Earn $300 today',p=>(p.daily?.earned||0)>=300],['Reduce Heat at least once',p=>(p.daily?.heat_reduced||0)>=1],
+ ['Complete a supplier purchase',p=>(p.daily?.supplier_buys||0)>=1],['Finish a scam-career job',p=>(p.daily?.fraud_jobs||0)>=1]
+];
+const WEEKLY_OBJECTIVE_POOL=[
+ ['Complete 5 legit shifts',p=>(p.weekly?.legit_shifts||0)>=5],['Complete 10 Quick Moves',p=>(p.weekly?.hustles||0)>=10],
+ ['Earn $3,000 this week',p=>(p.weekly?.earned||0)>=3000],['Complete 3 scam-career jobs',p=>(p.weekly?.fraud_jobs||0)>=3],
+ ['Complete a major move',p=>(p.weekly?.major_moves||0)>=1],['Lower Heat 3 times',p=>(p.weekly?.heat_reduced||0)>=3]
+];
+function hasScamGear(id){return (player.scam?.gear||[]).includes(id)}
+function policePressure(){return clamp((player.heat||0)*18+(player.warrants||0)*12+(player.trap?.attention||0)*.15,0,98)}
+function addAlert(text,type='CITY'){player.alerts=player.alerts||[];player.alerts.unshift({day:player.day,time:formatTime(player.time),type,text});player.alerts=player.alerts.slice(0,40);player.messages.unshift({from:type,text,day:player.day})}
+function policeCheck(reason='CITY PRESSURE'){
+ if(player.heat<=0)return [];
+ const roll=randInt(1,100),pressure=policePressure(),lines=[];
+ if(roll>pressure*.42)return lines;
+ if(player.heat<=2){lines.push('POLICE: Traffic stop.');if(player.active_vehicle!=='bicycle'&&!player.licenses.drivers){player.cash_on_person=Math.max(0,player.cash_on_person-120);lines.push('No driver license: $120 citation.')}if(player.equipped_weapon&&!player.licenses.carry){player.heat=clamp(player.heat+1,0,5);lines.push('Unpermitted carry raised Heat: +1★')}}
+ else if(player.heat===3){player.warrants=Math.max(1,player.warrants||0);lines.push('POLICE: Search pressure escalated. A warrant is now active.');addAlert('A warrant was issued. Searches and stops are more dangerous.','POLICE')}
+ else if(player.heat===4){player.warrants=Math.max(1,player.warrants||0);player.trap.attention=clamp(player.trap.attention+12,0,100);lines.push('POLICE: Active warrant + property surveillance. Trap attention +12%.');addAlert('Police surveillance increased around your properties.','POLICE')}
+ else {const arrest=randInt(1,100)<=55+(player.warrants||0)*8;if(arrest){player.stats.arrests=(player.stats.arrests||0)+1;player.cash_on_person=Math.floor(player.cash_on_person*.65);player.heat=3;player.warrants=0;player.time=DAY_START;lines.push('ARREST: You lost 35% of carried cash and came back at 3★ Heat.')}else{player.trap.attention=clamp(player.trap.attention+20,0,100);lines.push('RAID WARNING: You slipped the sweep. Trap attention +20%.');addAlert('Raid pressure is active. Stashing and laying low may be smart.','POLICE')}}
+ addActivity(`${reason}: ${lines[0]||'Police pressure'}`);return lines;
+}
+function ensureObjectives(){
+ player.weekly=player.weekly||{week:Math.floor((player.day-1)/7)+1,earned:0,hustles:0,legit_shifts:0,fraud_jobs:0,major_moves:0,heat_reduced:0,claimed:[]};
+ const wk=Math.floor((player.day-1)/7)+1;if(player.weekly.week!==wk)player.weekly={week:wk,earned:0,hustles:0,legit_shifts:0,fraud_jobs:0,major_moves:0,heat_reduced:0,claimed:[]};
+ player.objective_state=player.objective_state||{};
+ const seed=player.day%DAILY_OBJECTIVE_POOL.length;player.objective_state.daily=[seed,(seed+2)%DAILY_OBJECTIVE_POOL.length,(seed+4)%DAILY_OBJECTIVE_POOL.length];
+ player.objective_state.weekly=[(wk-1)%WEEKLY_OBJECTIVE_POOL.length,(wk+1)%WEEKLY_OBJECTIVE_POOL.length,(wk+3)%WEEKLY_OBJECTIVE_POOL.length];
+}
+function claimObjective(kind,idx){ensureObjectives();const pool=kind==='daily'?DAILY_OBJECTIVE_POOL:WEEKLY_OBJECTIVE_POOL,state=kind==='daily'?player.daily:player.weekly,key=`${kind}_${kind==='daily'?player.day:player.weekly.week}_${idx}`;player.objective_claims=player.objective_claims||[];if(player.objective_claims.includes(key)||!pool[idx][1](player))return;const reward=kind==='daily'?150:750,xp=kind==='daily'?40:180;player.cash_on_person+=reward;player.xp+=xp;player.stats.total_earned+=reward;player.objective_claims.push(key);saveGame();result('OBJECTIVE REWARD',[`${pool[idx][0]} complete.`,`Cash: +${money(reward)}`,`XP: +${xp}`])}
+
 const ACHIEVEMENTS={
  first_motion:{name:'First Motion',desc:'Earn your first $1,000 total cash.',rarity:'Common'},
  armed_up:{name:'Armed Up',desc:'Own your first weapon.',rarity:'Common'},
@@ -195,13 +244,13 @@ function newPlayer(name='Player'){
  return {
   name,day:1,time:DAY_START,level:1,xp:0,respect:0,heat:0,health:100,cash_on_person:0,bank_cash:0,bills_due:0,work_rep:0,location:'trap',
   phone_id:'burner',equipped_weapon:null,equipped_armor:null,weapon_inventory:[],armor_inventory:[],crew:[],
-  carried_drugs:emptyDrugInventory(),vehicles:['bicycle'],active_vehicle:'bicycle',properties:['starter_trap'],
+  carried_drugs:emptyDrugInventory(),vehicles:['bicycle'],vehicle_condition:{bicycle:100},active_vehicle:'bicycle',properties:['starter_trap'],
   trap:{cash:0,drug_stash:emptyDrugInventory(),weapons:[],armor:[],security:0,storage:1,condition:1,attention:0},
   market:Object.fromEntries(Object.keys(DRUGS).map(k=>[k,1])),supplier_trust:{Smoke:0,Doc:0,Ghost:0},
   skills:{combat:{xp:0,level:1},street:{xp:0,level:1},charisma:{xp:0,level:1},driving:{xp:0,level:1},business:{xp:0,level:1},endurance:{xp:0,level:1}},
   achievements:[],messages:[{from:'Unknown',text:'Everybody starts somewhere. Get some motion.'}],
   stats:{moves:0,successful_moves:0,failed_moves:0,hospital_visits:0,arrests:0,days_survived:1,biggest_score:0,highest_heat:0,total_earned:0,total_expenses:0,total_property_income:0,random_events:0,total_banked:0,job_counts:{},legit_shifts:0,legit_pay_earned:0},
-  daily:{}
+  licenses:{drivers:false,carry:false},warrants:0,scam:{gear:[],rep:0,jobs:0},alerts:[],objective_claims:[],og_reward_claimed:false,og_reward_eligible:false,weekly:{week:1,earned:0,hustles:0,legit_shifts:0,fraud_jobs:0,major_moves:0,heat_reduced:0,claimed:[]},daily:{}
  };
 }
 function migratePlayer(p){
@@ -216,6 +265,8 @@ function migratePlayer(p){
  p.trap.drug_stash={...d.trap.drug_stash,...(p.trap.drug_stash||{})};
  if(!p.phone_id)p.phone_id='burner';
  if(!Array.isArray(p.vehicles))p.vehicles=['bicycle'];
+ if(!p.vehicle_condition||typeof p.vehicle_condition!=='object')p.vehicle_condition={};
+ p.vehicles.forEach(id=>{if(!Number.isFinite(p.vehicle_condition[id]))p.vehicle_condition[id]=VEHICLES[id]?.reliability||100});
  if(!p.active_vehicle)p.active_vehicle='bicycle';
  if(!Array.isArray(p.properties))p.properties=['starter_trap'];
  if(!Array.isArray(p.achievements))p.achievements=[];
@@ -229,6 +280,15 @@ function migratePlayer(p){
  if(!Number.isFinite(p.tutorial.step))p.tutorial.step=0;
  if(typeof p.tutorial.completed!=='boolean')p.tutorial.completed=false;
  if(typeof p.tutorial.seen_version!=='string')p.tutorial.seen_version='';
+ if(!p.licenses||typeof p.licenses!=='object')p.licenses={drivers:false,carry:false};
+ if(!Number.isFinite(p.warrants))p.warrants=0;
+ if(!p.scam||typeof p.scam!=='object')p.scam={gear:[],rep:0,jobs:0};
+ if(!Array.isArray(p.scam.gear))p.scam.gear=[];
+ if(!Array.isArray(p.alerts))p.alerts=[];
+ if(!Array.isArray(p.objective_claims))p.objective_claims=[];
+ if(typeof p.og_reward_claimed!=='boolean')p.og_reward_claimed=false;
+ if(typeof p.og_reward_eligible!=='boolean')p.og_reward_eligible=true;
+ if(!p.weekly||typeof p.weekly!=='object')p.weekly={week:Math.floor((p.day-1)/7)+1,earned:0,hustles:0,legit_shifts:0,fraud_jobs:0,major_moves:0,heat_reduced:0,claimed:[]};
  if(!p.employment||typeof p.employment!=='object')p.employment={};
  const empD={current_job:null,shifts_worked:0,pending_pay:0,week_shifts:0,writeups:0,missed_shifts:0,last_shift_day:0,last_payday_day:0,employment_history:[]};
  Object.entries(empD).forEach(([k,v])=>{if(p.employment[k]===undefined)p.employment[k]=v});
@@ -244,7 +304,7 @@ function migratePlayer(p){
  if(!Number.isFinite(p.daily.moves_attempted))p.daily.moves_attempted=(p.daily.successes||0)+(p.daily.failures||0);
  return p;
 }
-function resetDaily(){player.daily={cash_start:player.cash_on_person+player.trap.cash+(player.bank_cash||0),xp_start:player.xp,respect_start:player.respect,heat_start:player.heat,successes:0,failures:0,job_counts:{},hustle_counts:{},moves_attempted:0}}
+function resetDaily(){player.daily={cash_start:player.cash_on_person+player.trap.cash+(player.bank_cash||0),xp_start:player.xp,respect_start:player.respect,heat_start:player.heat,successes:0,failures:0,job_counts:{},hustle_counts:{},moves_attempted:0,hustles_completed:0,legit_shifts:0,fraud_jobs:0,earned:0,heat_reduced:0,supplier_buys:0}}
 function saveGame(){if(!player)return;localStorage.setItem(SAVE_KEY,JSON.stringify(player));if(fmBackend.ready)syncCloudSave()}
 function loadGame(){try{return migratePlayer(JSON.parse(localStorage.getItem(SAVE_KEY)||localStorage.getItem(LEGACY_SAVE_KEY)))}catch{return null}}
 function hasSave(){return !!(localStorage.getItem(SAVE_KEY)||localStorage.getItem(LEGACY_SAVE_KEY))}
@@ -345,7 +405,7 @@ async function loadRemoteSettings(){
  if(!fmBackend.client)return;
  const {data,error}=await fmBackend.client.from('fm_game_settings').select('setting_key,setting_value').in('setting_key',['motion_tax_rate','game_version']);
  if(error)return;
- for(const row of data||[]){if(row.setting_key==='motion_tax_rate'){const n=Number(row.setting_value);if(Number.isFinite(n)&&n>=0&&n<=.25)fmBackend.taxRate=n}if(row.setting_key==='game_version'&&row.setting_value)fmBackend.gameVersion=String(row.setting_value)}
+ for(const row of data||[]){if(row.setting_key==='motion_tax_rate'){const n=Number(row.setting_value);if(Number.isFinite(n)&&n>=0&&n<=.25)fmBackend.taxRate=n}/* Public build version is pinned in code so stale backend settings cannot downgrade the client label. */}
 }
 
 async function refreshOwnerBank(){
@@ -545,7 +605,7 @@ function render(){
   black:renderBlack,weapons:renderWeapons,armor:renderArmor,equip:renderEquip,crew:renderCrew,map:renderMap,stash:renderStash,
   upgrades:renderUpgrades,hospital:renderHospital,status:renderStatus,market:renderMarket,phone:renderPhone,objectives:renderObjectives,
   achievements:renderAchievements,skills:renderSkills,laylow:renderLayLow,vehicles:renderVehicles,properties:renderProperties,
-  howto:renderHowTo,tutorial:renderTutorial,whatsnew:renderWhatsNew,patch:renderPatchNotes,activityHistory:renderActivityHistory,leaderboard:renderLeaderboard,bank:renderBank,employment:renderEmployment,profile:renderProfile,moveConfirm:renderMoveConfirm,playerCrew:renderPlayerCrew,territories:renderTerritories,territoryDetail:renderTerritoryDetail,ownerWallet:renderOwnerWallet,ownerDashboard:renderOwnerDashboard
+  howto:renderHowTo,tutorial:renderTutorial,whatsnew:renderWhatsNew,patch:renderPatchNotes,activityHistory:renderActivityHistory,leaderboard:renderLeaderboard,bank:renderBank,employment:renderEmployment,licenses:renderLicenses,scamCareer:renderScamCareer,phoneAlerts:renderPhoneAlerts,dailyWeekly:renderDailyWeekly,profile:renderProfile,moveConfirm:renderMoveConfirm,playerCrew:renderPlayerCrew,territories:renderTerritories,territoryDetail:renderTerritoryDetail,ownerWallet:renderOwnerWallet,ownerDashboard:renderOwnerDashboard
  };
  if(screen==='supplierShop')html+=renderSupplierShop(payload);else html+=(map[screen]||renderHome)();
  app().innerHTML=html+`<div class="footer-note">${fmBackend.ready?'Local save + cloud sync active.':'Local save active. Cloud will sync when connected.'}</div>`;
@@ -662,7 +722,7 @@ function performSideHustle(id){
  if(cost){player.cash_on_person-=cost;player.stats.total_expenses=(player.stats.total_expenses||0)+cost}
  const chance=hustleChance(id,h),elapsed=randInt(h.minutes[0],h.minutes[1]);
  player.daily.hustle_counts[id]=r.count+1;
- player.stats.side_hustles=(player.stats.side_hustles||0)+1;
+ player.stats.side_hustles=(player.stats.side_hustles||0)+1;player.daily.hustles_completed=(player.daily.hustles_completed||0)+1;player.weekly.hustles=(player.weekly.hustles||0)+1;
  player.daily.moves_attempted=(player.daily.moves_attempted||0)+1;
  advanceTime(elapsed);if(screen==='result')return;
  if(randInt(1,100)<=chance){
@@ -700,7 +760,10 @@ function renderHome(){
  return `${late}${hot}<div class="section-title">CITY ACTIONS</div><div class="menu-grid">
  ${menuCard(icon('phone'),'Phone',PHONES[player.phone_id].name,'phone','phone')}
  ${menuCard(icon('jobs'),'Make a Move','Jobs, robberies & heists','moves','jobs')}
- ${menuCard('⚡','Quick Moves','Clean work, street hustles & scam plays','hustles','jobs')}
+ ${menuCard('⚡','Quick Moves','Clean work & street hustles','hustles','jobs')}
+ ${menuCard('💻','Scam Career',`Rep ${player.scam?.rep||0} · ${(player.scam?.gear||[]).length} tools`,'scamCareer','jobs')}
+ ${menuCard('🪪','Licenses',`${player.licenses?.drivers?'Driver ✓':'Driver —'} · ${player.licenses?.carry?'Carry ✓':'Carry —'}`,'licenses','status')}
+ ${menuCard('🚔','Police Pressure',`${stars(player.heat)} · ${player.warrants||0} warrant(s)`,'phoneAlerts','status')}
  ${menuCard(icon('street'),'Street Move','Move carried inventory','street','street')}
  ${menuCard(icon('supplier'),'Supplier','Contacts & inventory','supplier','supplier')}
  ${menuCard(icon('market'),'Black Market','Weapons, armor & phones','black','market')}
@@ -717,7 +780,7 @@ function renderHome(){
  ${menuCard(icon('upgrade'),'Trap Upgrades','Security, storage, condition','upgrades','upgrade')}
  ${menuCard(icon('laylow'),'Lay Low','Reduce heat with time','laylow','laylow')}
  ${menuCard(icon('skills'),'Skills','Natural progression','skills','skills')}
- ${menuCard(icon('objectives'),'Objectives','Current progression goals','objectives','objectives')}
+ ${menuCard(icon('objectives'),'Objectives','Daily, weekly & progression goals','dailyWeekly','objectives')}
  ${menuCard(icon('achievements'),'Achievements','Badges and milestones','achievements','achievements')}
  ${menuCard(icon('hospital'),'Hospital','Treatment and recovery','hospital','hospital')}
  ${menuCard(icon('status'),'Status','Full player & trap status','status','status')}
@@ -809,6 +872,14 @@ function renderPhone(){
  </div><div class="phone-dock"><div class="actions">${btn('Quick Moves','hustles','Hustle Board')}${btn('Patch Notes','patch','Version history')}${btn('Activity','activityHistory','Recent actions')}</div>${btn('Upgrade Phone','phoneShop',`Current tier ${ph.tier}`,'primary')}</div></div></div></div>`;
 }
 
+function renderPhoneAlerts(){
+ const rows=(player.alerts||[]).map(a=>`<div class="item"><div class="item-head"><span>${escapeHtml(a.type)}</span><span>Day ${a.day}</span></div><div class="item-meta">${escapeHtml(a.time)} · ${escapeHtml(a.text)}</div></div>`).join('');
+ return `${back()}<div class="card"><div class="section-title">CITY PRESSURE</div><div class="status-grid">${stat('Heat',stars(player.heat))}${stat('Warrants',player.warrants||0)}${stat('Pressure',`${Math.round(policePressure())}%`)}${stat('Trap Attention',`${player.trap.attention}%`)}</div><div class="muted">5★ never blocks a move. It means you are choosing to operate while police pressure is at its worst.</div></div><div class="section-title">ALERTS</div><div class="list">${rows||'<div class="card muted">No alerts yet.</div>'}</div>`;
+}
+function renderLicenses(){return `${back()}<div class="card"><div class="section-title">CITY LICENSES</div><div class="muted">Licenses do not stop illegal choices. They change what happens during police encounters.</div></div><div class="list">${Object.entries(LICENSES).map(([id,x])=>`<div class="item"><div class="item-head"><span>${escapeHtml(x.name)}</span><span>${player.licenses[id]?'ACTIVE':money(x.price)}</span></div><div class="item-meta">${escapeHtml(x.desc)}</div>${player.licenses[id]?'':btn('Get License',`buyLicense:${id}`,'','primary')}</div>`).join('')}</div>`}
+function renderScamCareer(){const gear=Object.entries(SCAM_GEAR).map(([id,g])=>`<div class="item"><div class="item-head"><span>${escapeHtml(g.name)}</span><span>${hasScamGear(id)?'OWNED':money(g.price)}</span></div><div class="item-meta">Career tool · Tier ${g.tier}</div>${hasScamGear(id)?'':btn('Buy Tool',`buyScamGear:${id}`,'','primary')}</div>`).join('');const jobs=Object.entries(FRAUD_JOBS).map(([id,j])=>{const missing=j.req.filter(x=>!hasScamGear(x));const chance=clamp(j.success+(player.scam?.rep||0)*.35-player.heat*4,20,94);return `<div class="job-card ${j.tier>=4?'black':j.tier>=3?'red':j.tier>=2?'yellow':'green'}"><div class="job-banner"><span>${escapeHtml(j.name)}</span><span>TIER ${j.tier}</span></div><div class="job-metrics"><div><span>SUCCESS</span><strong>${Math.round(chance)}%</strong></div><div><span>PAYOUT</span><strong>${money(j.cash[0])}–${money(j.cash[1])}</strong></div><div><span>HEAT</span><strong>+${j.heat}★</strong></div><div><span>TIME</span><strong>${j.minutes[0]}–${j.minutes[1]}m</strong></div></div><div class="job-reqs"><span>${missing.length?'Missing: '+missing.map(x=>SCAM_GEAR[x].name).join(', '):'Equipment ready'}</span></div><div class="job-action">${btn('Run Play',`fraudJob:${id}`,missing.length?'Get required gear first':'Abstract fictional game roll',missing.length?'':'primary')}</div></div>`}).join('');return `${back()}<div class="card"><div class="hero-kicker">SCAM CAREER</div><h2>Digital & Paper Motion</h2><div class="muted">Build equipment, reputation and access. Jobs are fictionalized game abstractions—requirements, odds, payout, Heat and consequences.</div><div class="status-grid">${stat('Scam Rep',player.scam?.rep||0)}${stat('Career Jobs',player.scam?.jobs||0)}${stat('Tools',(player.scam?.gear||[]).length)}${stat('Heat',stars(player.heat))}</div></div><div class="section-title">CAREER JOBS</div><div class="job-list">${jobs}</div><div class="section-title">BLACK-MARKET TOOLS</div><div class="list">${gear}</div>`}
+function renderDailyWeekly(){ensureObjectives();const daily=player.objective_state.daily.map(i=>{const o=DAILY_OBJECTIVE_POOL[i],done=o[1](player),key=`daily_${player.day}_${i}`,claimed=(player.objective_claims||[]).includes(key);return `<div class="item objective ${done?'done':''}"><div class="item-head"><span>${done?'✓':'○'} ${escapeHtml(o[0])}</span><span>${claimed?'CLAIMED':done?'READY':'ACTIVE'}</span></div>${done&&!claimed?btn('Claim $150 + 40 XP',`claimObj:daily:${i}`,'','good'):''}</div>`}).join('');const weekly=player.objective_state.weekly.map(i=>{const o=WEEKLY_OBJECTIVE_POOL[i],done=o[1](player),key=`weekly_${player.weekly.week}_${i}`,claimed=(player.objective_claims||[]).includes(key);return `<div class="item objective ${done?'done':''}"><div class="item-head"><span>${done?'✓':'○'} ${escapeHtml(o[0])}</span><span>${claimed?'CLAIMED':done?'READY':'ACTIVE'}</span></div>${done&&!claimed?btn('Claim $750 + 180 XP',`claimObj:weekly:${i}`,'','good'):''}</div>`}).join('');return `${back()}<div class="section-title">DAILY OBJECTIVES · DAY ${player.day}</div><div class="list">${daily}</div><div class="section-title">WEEKLY OBJECTIVES · WEEK ${player.weekly.week}</div><div class="list">${weekly}</div><div class="section-title">PROGRESSION</div>${renderObjectives().replace(back(),'')}`}
+
 function renderPhoneShop(){
  const items=Object.entries(PHONES).filter(([id])=>id!==player.phone_id).map(([id,p])=>{const q=purchaseQuote(p.price),owned=PHONES[player.phone_id].tier>=p.tier;
  return `<div class="item"><div class="item-head"><span>${p.name}</span><span>Tier ${p.tier}</span></div><div class="item-meta">${p.apps.join(' · ')}<br>${owned?'Already below your current tier':`Price ${money(q.total)} · Tax ${money(q.tax)}`}</div>${owned?'':btn('Buy / Activate',`buyPhone:${id}`,'','primary')}</div>`}).join('');
@@ -826,7 +897,7 @@ function renderLayLow(){
  </div>`;
 }
 function renderVehicles(){
- return `${back()}<div class="card"><div class="section-title">YOUR GARAGE</div>${player.vehicles.map(id=>`<div class="item"><div class="item-head"><span>${VEHICLES[id].name}</span><span>${player.active_vehicle===id?'ACTIVE':'OWNED'}</span></div><div class="item-meta">Speed ${Math.round((1-VEHICLES[id].speed)*100)} · Storage ${VEHICLES[id].storage} · Reliability ${VEHICLES[id].reliability}%</div>${player.active_vehicle===id?'':btn('Set Active',`activeVehicle:${id}`)}</div>`).join('')}</div>
+ return `${back()}<div class="card"><div class="section-title">YOUR GARAGE</div>${player.vehicles.map(id=>`<div class="item"><div class="item-head"><span>${VEHICLES[id].name}</span><span>${player.active_vehicle===id?'ACTIVE':'OWNED'}</span></div><div class="item-meta">Speed ${Math.round((1-VEHICLES[id].speed)*100)} · Storage ${VEHICLES[id].storage} · Condition ${Math.round(player.vehicle_condition?.[id]??VEHICLES[id].reliability)}%</div>${(player.vehicle_condition?.[id]??100)<95?btn('Repair',`repairVehicle:${id}`,`Estimated ${money(Math.max(20,Math.round((100-(player.vehicle_condition?.[id]??100))*8)))}`):''}${player.active_vehicle===id?'':btn('Set Active',`activeVehicle:${id}`)}</div>`).join('')}</div>
  <div class="section-title">VEHICLE MARKET</div><div class="list">${Object.entries(VEHICLES).filter(([id])=>!player.vehicles.includes(id)).map(([id,v])=>{const q=purchaseQuote(v.price);return `<div class="item"><div class="item-head"><span>${v.name}</span><span>${money(q.total)}</span></div><div class="item-meta">Speed ${Math.round((1-v.speed)*100)} · Storage ${v.storage} · Attention ${v.attention} · Reliability ${v.reliability}% · Tax ${money(q.tax)}</div>${btn('Buy Vehicle',`buyVehicle:${id}`,'','primary')}</div>`}).join('')}</div>`;
 }
 function renderProperties(){
@@ -960,25 +1031,26 @@ function renderHowTo(){return `${btn('← Start','start','','back')}<div class="
  </div></div>`}
 
 const TUTORIAL_STEPS=[
- {title:'WELCOME TO FEDERAL MOTION',text:'Your day starts at 8:00 AM. Every move burns game time, so watch the clock and get back to your trap before the danger window.',tip:'Use the HUD clock at the top of the screen.'},
- {title:'YOUR PHONE',text:'The phone is your street hub for messages, alerts, jobs, the market and more apps as you upgrade it.',tip:'New alerts can point out systems you have not used yet.'},
- {title:'CASH, STASH & RESERVE',text:'Cash on you is exposed. Your trap stash holds inventory and your Cash Reserve protects money you are not carrying.',tip:'Do not carry everything when you are taking risks.'},
- {title:'QUICK MOVES',text:'Quick Moves are shorter opportunities: legit side work, street hustles and higher-risk scam plays. Repeating the same opportunity lowers its success odds for the day.',tip:'Clean work can cool Heat. Risky work can raise it fast.'},
- {title:'EMPLOYMENT',text:'Legit jobs now start no earlier than 8:00 AM. Clock in within the 30-minute grace window, work unarmed, build Work Rep, earn raises and collect weekly pay.',tip:'Steady legit work can lower Heat and pays attendance bonuses.'},
- {title:'HEAT, JAIL & HOSPITAL',text:'Heat runs from 0 to 5 stars. High Heat hurts your odds and increases pressure. Failed risky moves can cost cash, health, gear or freedom.',tip:'Lay Low and clean work are safer ways to cool down.'},
- {title:'GEAR, RIDES & BIG MOVES',text:'Robberies require weapons and bigger moves demand stronger gear, levels or crew. Vehicles affect travel and some opportunities.',tip:'Use the quick Weapon and Ride boxes in the HUD to switch gear.'},
- {title:'CREWS & TERRITORY',text:'Build or join a player crew, challenge territory and hold zones for bonuses and rewards.',tip:'You do not need to rush this on Day 1.'},
- {title:'YOUR FIRST OBJECTIVE',text:'Start small: complete a Quick Move, learn the city, then build toward your first $500 without letting Heat get out of control.',tip:'When you finish this walkthrough, the city opens up.'}
-];
+ {title:'WELCOME TO FEDERAL MOTION',text:'This first run is protected. Tutorial actions are freebies so you can learn the city without getting arrested, hurt or losing your starter progress.',tip:'Your real risk begins after the walkthrough.'},
+ {title:'CHECK YOUR PHONE',text:'Your phone carries jobs, alerts, objectives, market information and city navigation. Better phones unlock more apps.',tip:'Check Alerts when Heat or warrants start climbing.'},
+ {title:'GET YOUR FIRST MOTION',text:'Quick Moves are your starter lane. Clean work builds money with low pressure; risky lanes pay more but bring consequences.',tip:'The tutorial assumes your first starter hustle succeeds.'},
+ {title:'PROTECT YOUR MONEY',text:'Cash on you can be exposed during bad outcomes. Your trap stash and Cash Reserve are safer places to keep progress.',tip:'Do not carry everything into a high-risk move.'},
+ {title:'WORK A CLEAN SHIFT',text:'Employment gives scheduled clean income, Work Rep, promotions and a way to cool Heat. Shifts start no earlier than the 8:00 AM game day.',tip:'Clock in unarmed and within the grace window.'},
+ {title:'HEAT & POLICE',text:'Heat never locks you out. Traffic stops can escalate into searches, warrants, surveillance, raids and arrests. Licenses change some stop outcomes.',tip:'At 5★ you can still make the move—you are accepting the pressure.'},
+ {title:'SCAM CAREER',text:'The scam lane works like another career tree. Buy fictional black-market tools, build Scam Rep and unlock higher-tier abstract plays.',tip:'The game uses fictional requirements and chance rolls, not real-world instructions.'},
+ {title:'END THE DAY',text:'Return to your trap, review the city report and sleep. Daily events, bills, property income, work and police pressure can all change overnight.',tip:'Get home before the danger window when you can.'},
+ {title:'YOU ARE READY',text:'Your protected introduction is complete. Build your own route through legit work, street motion, crews, properties, vehicles, territories and the scam career.',tip:'There is no single correct path.'}
+]
 function renderTutorial(){
  const i=clamp(Number(player?.tutorial?.step||0),0,TUTORIAL_STEPS.length-1),t=TUTORIAL_STEPS[i];
  return `<div class="card tutorial-card"><div class="hero-kicker">NEW PLAYER WALKTHROUGH · ${i+1}/${TUTORIAL_STEPS.length}</div><h2>${escapeHtml(t.title)}</h2><div class="tutorial-copy">${escapeHtml(t.text)}</div><div class="notice good">TIP: ${escapeHtml(t.tip)}</div><div class="actions">${i>0?btn('← Back','tutorialPrev','','back'):''}${btn(i===TUTORIAL_STEPS.length-1?'ENTER THE CITY →':'Next →','tutorialNext','','primary')}</div></div>`;
 }
 function renderWhatsNew(){
- return `<div class="card tutorial-card"><div class="hero-kicker">NEW IN ${escapeHtml(fmBackend.gameVersion)}</div><h2>THE CITY CHANGED</h2><div class="result-lines"><div class="result-line">⏰ Job schedules now fit the 8:00 AM game-day start.</div><div class="result-line">💼 Legit base pay, promotion pay and bonuses were raised.</div><div class="result-line">🧊 Completing legit shifts can lower Heat, and consistent weekly attendance can earn a bonus.</div><div class="result-line">⚡ Quick Moves now include clean side work, street opportunities and fictional scam/fraud plays.</div><div class="result-line">📚 New players get a full walkthrough. Returning players get this one-time update alert when a new version adds systems.</div></div><div class="actions">${btn('SHOW ME THE WALKTHROUGH','whatsNewTutorial','','back')}${btn('GOT IT — ENTER CITY','whatsNewDone','','primary')}</div></div>`;
+ const og=player.og_reward_eligible&&!player.og_reward_claimed?`<div class="card og-card"><div class="hero-kicker">MESSAGE FROM THE OWNER</div><h2>YOU SURVIVED THE EARLY BUILDS 😂</h2><div class="tutorial-copy">You made it through the ugly builds, broken buttons, questionable balance and whatever the hell Alpha was doing back then. Appreciate you being here through the first waves of Federal Motion. $10,000 is waiting for you. Enjoy it. Spend wisely. Or don’t. I already know how y’all play.</div>${btn('CLAIM $10,000 OG BONUS','claimOgReward','','good')}</div>`:'';
+ return `<div class="card tutorial-card"><div class="hero-kicker">NEW IN ALPHA 0.8</div><h2>CITY PRESSURE UPDATE</h2><div class="result-lines"><div class="result-line">🚔 Heat now escalates into traffic stops, searches, warrants, surveillance, raids and arrests. 5★ never blocks a move.</div><div class="result-line">🪪 Driver and carry licenses now affect police encounters.</div><div class="result-line">💻 Scam Career is now a progression lane with equipment, reputation and higher-tier fictional plays.</div><div class="result-line">📱 Phone Alerts track police pressure, work, city events and important changes.</div><div class="result-line">🎯 Daily + weekly objectives now pay claimable rewards.</div><div class="result-line">🚗 Vehicle reliability/repair and deeper property benefits are part of city progression.</div></div><div class="actions">${btn('SHOW WALKTHROUGH','whatsNewTutorial','','back')}${btn('ENTER CITY','whatsNewDone','','primary')}</div></div>${og}`;
 }
-
 const PATCH_NOTES_HISTORY=[
+ {version:'Alpha 0.8',title:'CITY PRESSURE UPDATE',notes:['Escalating police pressure: stops, searches, warrants, raids and arrests','Driver and carry licenses','Scam Career equipment + reputation progression','Phone alerts','Daily and weekly objectives','Vehicle reliability and property utility','One-time OG appreciation reward for returning players']},
  {
   version:'Alpha 0.7',
   title:'CITY SYSTEMS + TUTORIAL UPDATE',
@@ -1563,6 +1635,7 @@ function endDay(){
  const income=collectPropertyIncome();
  const expenses=chargeDailyExpenses();
  const event=cityLifeRandomEvent();
+ const police=policeCheck('Overnight police pressure');
 
  player.day++;
  player.time=DAY_START;
@@ -1594,6 +1667,7 @@ function endDay(){
   ...night,
   '--- CITY EVENT ---',
   ...event,
+  ...(police.length?['--- POLICE PRESSURE ---',...police]:[]),
   `Heat: ${stars(player.heat)}`,
   'The city is moving again.'
  ])
@@ -1613,15 +1687,15 @@ function renderAlerts(){const x=[];if(player.heat>=3)x.push(`Heat is ${stars(pla
 
 function handle(action){
  if(action==='new'){const name=prompt('Enter player name:','Player')||'Player';player=newPlayer(name);player.tutorial={step:0,completed:false,seen_version:''};generateMarket();resetDaily();saveGame();screen='tutorial';payload=null;render();return}
- if(action==='continue'){player=loadGame();if(!player){screen='start';render();return}screen=player.tutorial?.seen_version===fmBackend.gameVersion?'home':'whatsnew';render();return}
+ if(action==='continue'){player=loadGame();if(!player){screen='start';render();return}if(player.tutorial?.seen_version!=='Alpha 0.8'&&!player.og_reward_claimed)player.og_reward_eligible=true;screen=player.tutorial?.seen_version==='Alpha 0.8'?'home':'whatsnew';render();return}
  if(action==='deleteSave'){if(confirm('Delete your Federal Motion local save?')){localStorage.removeItem(SAVE_KEY);localStorage.removeItem(LEGACY_SAVE_KEY);player=null;screen='start';render()}return}
  if(action==='start'){screen='start';render();return}
  if(action==='home'){screen='home';payload=null;render();return}
  if(action==='tutorialPrev'){player.tutorial.step=Math.max(0,(player.tutorial.step||0)-1);saveGame();screen='tutorial';render();return}
- if(action==='tutorialNext'){if((player.tutorial.step||0)>=TUTORIAL_STEPS.length-1){player.tutorial.completed=true;player.tutorial.seen_version=fmBackend.gameVersion;saveGame();screen='home';render();return}player.tutorial.step=(player.tutorial.step||0)+1;saveGame();screen='tutorial';render();return}
+ if(action==='tutorialNext'){if((player.tutorial.step||0)>=TUTORIAL_STEPS.length-1){player.tutorial.completed=true;player.tutorial.seen_version='Alpha 0.8';saveGame();screen='home';render();return}player.tutorial.step=(player.tutorial.step||0)+1;saveGame();screen='tutorial';render();return}
  if(action==='whatsNewTutorial'){player.tutorial.step=0;screen='tutorial';render();return}
- if(action==='whatsNewDone'){player.tutorial.seen_version=fmBackend.gameVersion;saveGame();screen='home';render();return}
- const direct=['moves','hustles','street','supplier','black','weapons','armor','equip','crew','map','stash','bank','employment','profile','playerCrew','territories','upgrades','hospital','status','market','phone','objectives','achievements','skills','laylow','vehicles','properties','howto','tutorial','whatsnew','patch','activityHistory','leaderboard','ownerWallet','ownerDashboard'];
+ if(action==='whatsNewDone'){player.tutorial.seen_version='Alpha 0.8';saveGame();screen='home';render();return}
+ const direct=['moves','hustles','street','supplier','black','weapons','armor','equip','crew','map','stash','bank','employment','profile','playerCrew','territories','upgrades','hospital','status','market','phone','objectives','achievements','skills','laylow','vehicles','properties','howto','tutorial','whatsnew','patch','activityHistory','leaderboard','licenses','scamCareer','phoneAlerts','dailyWeekly','ownerWallet','ownerDashboard'];
  if(direct.includes(action)){screen=action;payload=null;render();if(action==='leaderboard')setTimeout(loadLeaderboard,0);if(action==='ownerDashboard')setTimeout(loadOwnerDashboard,0);if(action==='playerCrew'||action==='territories')refreshCrewWorld().then(()=>render());return}
  if(action==='phoneShop'){screen='phoneShop';payload=null;app().innerHTML=header()+renderPhoneShop()+`<div class="footer-note">Local + cloud save active.</div>`;return}
  if(action==='phoneMessages'){app().innerHTML=header()+renderMessages()+`<div class="footer-note">Local + cloud save active.</div>`;return}
@@ -1763,7 +1837,12 @@ function handle(action){
 
  if(action.startsWith('takeLegitJob:')){const id=action.split(':')[1],j=LEGIT_JOBS[id];if(!j)return;player.employment={...player.employment,current_job:id,shifts_worked:0,week_shifts:0,writeups:0,missed_shifts:0,last_shift_day:0};player.messages.unshift({from:`${j.company} HR`,text:`Welcome aboard. First shift starts at ${formatTime(j.start)}. Try not to make us regret this.`,day:player.day});saveGame();result('YOU GOT THE JOB',[`${j.company} · ${j.title}`,`Shift: ${formatTime(j.start)}–${formatTime(j.start+j.duration)}`,`Starting pay: ${money(j.base_pay)}/shift`,`Payday: weekly`,`Report to work unarmed.`]);return}
  if(action==='quitLegitJob'){const j=workJob();if(!j)return;player.employment.employment_history.unshift({company:j.company,title:currentWorkTier(j)?.title||j.title,shifts:player.employment.shifts_worked,status:'Quit'});player.employment.current_job=null;saveGame();result('JOB ENDED',[`You quit ${j.company}.`,`Pending pay remains scheduled for payday.`]);return}
- if(action==='clockInLegit'){const j=workJob(),c=canClockIn();if(!c.ok){result('CAN’T CLOCK IN',[c.msg]);return}const oldN=player.employment.shifts_worked,pay=workShiftPay(j);player.time=j.start;advanceTime(j.duration);player.location='trap';player.employment.last_shift_day=player.day;player.employment.shifts_worked++;player.employment.week_shifts++;player.employment.pending_pay+=pay;player.stats.legit_shifts=(player.stats.legit_shifts||0)+1;player.work_rep=(player.work_rep||0)+1;addSkillXP(j.skill,6);const lines=[`${j.company} · ${currentWorkTier(j).title}`,`Shift completed: ${Math.round(j.duration/60)} hours`,`Pending pay: +${money(pay)}`,`Total pending pay: ${money(player.employment.pending_pay)}`,`Work Rep: ${player.work_rep}`,`WORKPLACE: ${workEvent()}`,...applyWorkMilestone(j,oldN,player.employment.shifts_worked)];if(player.heat>0){player.heat=Math.max(0,player.heat-1);lines.push('Clean income cooled Heat: -1★')}if(player.employment.week_shifts>0&&player.employment.week_shifts%5===0){const attendance=Math.max(25,Math.round(pay*.5));player.employment.pending_pay+=attendance;lines.push(`Attendance bonus: +${money(attendance)} pending pay`)}if(Math.random()<.18){player.employment.pending_pay+=18;advanceTime(180);lines.push('OVERTIME: +$18 pending pay · +3 hours')}streetTemptationMessage();saveGame();result('SHIFT COMPLETE',lines);return}
+ if(action==='clockInLegit'){const j=workJob(),c=canClockIn();if(!c.ok){result('CAN’T CLOCK IN',[c.msg]);return}const oldN=player.employment.shifts_worked,pay=workShiftPay(j);player.time=j.start;advanceTime(j.duration);player.location='trap';player.employment.last_shift_day=player.day;player.employment.shifts_worked++;player.employment.week_shifts++;player.employment.pending_pay+=pay;player.stats.legit_shifts=(player.stats.legit_shifts||0)+1;player.daily.legit_shifts=(player.daily.legit_shifts||0)+1;player.weekly.legit_shifts=(player.weekly.legit_shifts||0)+1;player.daily.earned=(player.daily.earned||0)+pay;player.weekly.earned=(player.weekly.earned||0)+pay;player.work_rep=(player.work_rep||0)+1;addSkillXP(j.skill,6);const lines=[`${j.company} · ${currentWorkTier(j).title}`,`Shift completed: ${Math.round(j.duration/60)} hours`,`Pending pay: +${money(pay)}`,`Total pending pay: ${money(player.employment.pending_pay)}`,`Work Rep: ${player.work_rep}`,`WORKPLACE: ${workEvent()}`,...applyWorkMilestone(j,oldN,player.employment.shifts_worked)];if(player.heat>0){player.heat=Math.max(0,player.heat-1);player.daily.heat_reduced=(player.daily.heat_reduced||0)+1;player.weekly.heat_reduced=(player.weekly.heat_reduced||0)+1;lines.push('Clean income cooled Heat: -1★')}if(player.employment.week_shifts>0&&player.employment.week_shifts%5===0){const attendance=Math.max(25,Math.round(pay*.5));player.employment.pending_pay+=attendance;lines.push(`Attendance bonus: +${money(attendance)} pending pay`)}if(Math.random()<.18){player.employment.pending_pay+=18;advanceTime(180);lines.push('OVERTIME: +$18 pending pay · +3 hours')}streetTemptationMessage();saveGame();result('SHIFT COMPLETE',lines);return}
+ if(action==='claimOgReward'){if(player.og_reward_eligible&&!player.og_reward_claimed){player.cash_on_person+=10000;player.stats.total_earned+=10000;player.og_reward_claimed=true;addActivity('Claimed Alpha 0.8 OG appreciation bonus');saveGame();result('OG BONUS CLAIMED',['From the owner: appreciate you riding through the early waves. 😂','Cash: +$10,000','Enjoy it. Spend wisely. Or don’t.'])}return}
+ if(action.startsWith('buyLicense:')){const id=action.split(':')[1],x=LICENSES[id];if(!x||player.licenses[id])return;if(player.cash_on_person<x.price){result('LICENSE OFFICE',[`Need ${money(x.price)}.`]);return}player.cash_on_person-=x.price;player.licenses[id]=true;saveGame();result('LICENSE ISSUED',[x.name,`Cost: -${money(x.price)}`]);return}
+ if(action.startsWith('buyScamGear:')){const id=action.split(':')[1],g=SCAM_GEAR[id];if(!g||hasScamGear(id))return;const c=taxedPurchase(g.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.scam.gear.push(id);saveGame();result('TOOL ACQUIRED',[g.name,`Total: -${money(c.total)}`]);return}
+ if(action.startsWith('fraudJob:')){const id=action.split(':')[1],j=FRAUD_JOBS[id];if(!j)return;const missing=j.req.filter(x=>!hasScamGear(x));if(missing.length){result('EQUIPMENT REQUIRED',[...missing.map(x=>SCAM_GEAR[x].name)]);return}const chance=clamp(j.success+(player.scam.rep||0)*.35-player.heat*4,20,94);advanceTime(randInt(...j.minutes));if(screen==='result')return;player.scam.jobs++;player.daily.fraud_jobs=(player.daily.fraud_jobs||0)+1;player.weekly.fraud_jobs=(player.weekly.fraud_jobs||0)+1;if(randInt(1,100)<=chance){const pay=randInt(...j.cash);player.cash_on_person+=pay;player.stats.total_earned+=pay;player.daily.earned=(player.daily.earned||0)+pay;player.weekly.earned=(player.weekly.earned||0)+pay;player.scam.rep+=randInt(2,5);player.heat=clamp(player.heat+j.heat,0,5);const police=policeCheck('Scam career');saveGame();result('PLAY HIT',[`${j.name}: +${money(pay)}`,`Scam Rep: ${player.scam.rep}`,`Heat: +${j.heat}★`,...police])}else{player.heat=clamp(player.heat+j.heat,0,5);const police=policeCheck('Failed scam career job');saveGame();result('PLAY BURNED',[`${j.name} failed.`,`Heat: +${j.heat}★`,...police])}return}
+ if(action.startsWith('claimObj:')){const [,kind,idx]=action.split(':');claimObjective(kind,Number(idx));return}
  if(action==='sleep'){endDay();return}
  if(action.startsWith('doMove:')){
   const id=action.split(':')[1],m=MOVES[id],r=m?requirement(m):'Move unavailable';
@@ -1780,7 +1859,7 @@ function handle(action){
   return
  }
  if(action.startsWith('supplier:')){const n=action.split(':')[1];if((n==='Doc'&&player.respect<3)||(n==='Ghost'&&player.respect<8)){result('NOT YET',[n==='Doc'?'Doc: Come back when people know your name.':'Ghost isn’t interested yet.']);return}travelTo('supplier');if(screen==='result')return;screen='supplierShop';payload=n;render();return}
- if(action==='buyDrugGo'){const id=$('#buyDrug').value,g=parseFloat($('#buyGrams').value||0),p=supplierUnitPrice(id),cost=Math.floor(g*p),name=payload;if(g<=0)return;const charge=taxedPurchase(cost);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)} including ${money(charge.tax)} Motion Tax.`]);return}player.carried_drugs[id]+=g;player.supplier_trust[name]++;addSkillXP('charisma',4);advanceTime(30);if(screen==='result')return;result('DEAL COMPLETE',[`${DRUGS[id].name}: +${g.toFixed(1)}g`,`Base: -${money(charge.base)}`,`Motion Tax: -${money(charge.tax)}`,`Total: -${money(charge.total)}`]);return}
+ if(action==='buyDrugGo'){const id=$('#buyDrug').value,g=parseFloat($('#buyGrams').value||0),p=supplierUnitPrice(id),cost=Math.floor(g*p),name=payload;if(g<=0)return;const charge=taxedPurchase(cost);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)} including ${money(charge.tax)} Motion Tax.`]);return}player.carried_drugs[id]+=g;player.supplier_trust[name]++;player.daily.supplier_buys=(player.daily.supplier_buys||0)+1;addSkillXP('charisma',4);advanceTime(30);if(screen==='result')return;result('DEAL COMPLETE',[`${DRUGS[id].name}: +${g.toFixed(1)}g`,`Base: -${money(charge.base)}`,`Motion Tax: -${money(charge.tax)}`,`Total: -${money(charge.total)}`]);return}
  if(action==='streetGo'){const id=$('#streetDrug').value,g=Math.min(parseFloat($('#streetGrams').value||0),player.carried_drugs[id]);if(g<=0)return;const d=DRUGS[id],zoneStreet=territoryBonusPercent('street'),pay=Math.floor(g*d.base_value*player.market[id]*(.68+Math.random()*.20)*(1+zoneStreet/100)),chance=Math.max(28,92-d.risk*4-heatPenalty()+skillLevel('street'));advanceTime(randInt(35,65));if(screen==='result')return;player.stats.moves++;addSkillXP('street',12);if(randInt(1,100)<=chance){player.carried_drugs[id]-=g;player.cash_on_person+=pay;player.stats.total_earned+=pay;const xp=Math.max(10,Math.floor(g*2));player.xp+=xp;if(randInt(1,100)<=d.risk*8)player.heat=clamp(player.heat+1,0,5);player.stats.successful_moves++;player.daily.successes++;const lvl=updateLevel();result('MOVE SUCCESSFUL',[`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(lvl?[lvl]:[])])}else{player.stats.failed_moves++;player.daily.failures++;player.heat=clamp(player.heat+1,0,5);result('MOVE WENT BAD',['The opportunity fell apart.','No inventory was lost.','Heat: +1★'])}return}
  if(action.startsWith('buyWeapon:')){const id=action.split(':')[1],w=WEAPONS[id],c=taxedPurchase(w.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including Motion Tax.`]);return}player.weapon_inventory.push({id,condition:w.condition,upgrades:0});advanceTime(30);result('PURCHASE COMPLETE',[`Purchased ${w.name}.`,`Base: -${money(c.base)}`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action.startsWith('buyArmor:')){const id=action.split(':')[1],a=ARMOR[id],c=taxedPurchase(a.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including Motion Tax.`]);return}player.armor_inventory.push(id);advanceTime(25);result('PURCHASE COMPLETE',[`Purchased ${a.name}.`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
@@ -1789,7 +1868,8 @@ function handle(action){
  if(action.startsWith('hire:')){const id=action.split(':')[1],c=CREW[id];travelTo('crew_spot');if(screen==='result')return;const charge=taxedPurchase(c.price);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)}.`]);return}player.crew.push(id);addSkillXP('charisma',15);advanceTime(45);result('CREW UPDATED',[`${c.name} joined as ${c.role}.`,`Motion Tax: -${money(charge.tax)}`]);return}
  if(action.startsWith('travel:')){const id=action.split(':')[1];if(id===player.location)return;travelTo(id);if(screen==='result')return;result('TRAVEL COMPLETE',[`Arrived at ${LOCATIONS[id].name}.`,`Time: ${formatTime(player.time)}`]);return}
  if(action.startsWith('activeVehicle:')){const id=action.split(':')[1];if(player.vehicles.includes(id)){player.active_vehicle=id;saveGame();screen='vehicles';render()}return}
- if(action.startsWith('buyVehicle:')){const id=action.split(':')[1],v=VEHICLES[id],c=taxedPurchase(v.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.vehicles.push(id);player.active_vehicle=id;result('VEHICLE PURCHASED',[`${v.name} added to your garage.`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
+ if(action.startsWith('repairVehicle:')){const id=action.split(':')[1],cond=player.vehicle_condition?.[id]??100,cost=Math.max(20,Math.round((100-cond)*8));if(player.cash_on_person<cost){result('GARAGE',[`Need ${money(cost)}.`]);return}player.cash_on_person-=cost;player.vehicle_condition[id]=100;saveGame();result('VEHICLE REPAIRED',[`${VEHICLES[id].name} condition restored to 100%.`,`Cost: -${money(cost)}`]);return}
+ if(action.startsWith('buyVehicle:')){const id=action.split(':')[1],v=VEHICLES[id],c=taxedPurchase(v.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.vehicles.push(id);player.vehicle_condition[id]=v.reliability;player.active_vehicle=id;result('VEHICLE PURCHASED',[`${v.name} added to your garage.`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action.startsWith('buyProperty:')){const id=action.split(':')[1],p=PROPERTIES[id],c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.properties.push(id);result('PROPERTY PURCHASED',[`${p.name} is now yours.`,`Motion Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action==='bankDeposit'||action==='bankWithdraw'){
   if(player.location!=='trap'){result('CASH RESERVE',['Return to your trap to move reserve cash.']);return}
