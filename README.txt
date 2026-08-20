@@ -43,3 +43,20 @@ ALPHA 0.8.3 — FLOW + WORK LOADOUT FIX
 - Lay Low returns to Lay Low.
 - Employment actions return to Employment.
 - Employment now includes an in-menu option to unequip/stow the active weapon before a shift.
+
+ALPHA 0.8.4 — ECONOMY BALANCE
+- Rebalanced street-sale margins so higher-tier inventory has stronger profit upside.
+- Bulk sales now have diminishing returns, more risk, and capped XP scaling.
+- Large bulk moves can create additional Heat.
+- Major heist payouts increased so crew jobs remain worthwhile after cuts.
+- Player-facing Cash Reserve renamed Emergency Fund for clarity.
+- City Tax remains the player-facing transaction-fee name.
+
+
+ALPHA 0.8.5 — ECONOMY LADDER
+- Successful street sales now always pay above supplier cost + City Tax.
+- Drug profit potential increases by tier; Heroin has the highest drug profit ceiling.
+- Scam Career payouts increase by tier; the final scam-career play has the highest scam payout.
+- Quick Moves now have a clearer low-to-extreme risk income ladder.
+- Robberies and heists scale more clearly with requirements, danger and progression.
+- Higher-tier activities require more setup and carry more consequences, but reward a higher earning ceiling.

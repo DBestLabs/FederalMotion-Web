@@ -11,7 +11,7 @@ const SUPABASE_PUBLISHABLE_KEY='sb_publishable_KlgKi5KFxRqrMbGzZIVVSQ_-JM9OlON';
 const DAY_START=8*60, WARNING_TIME=24*60, DAY_END=26*60, MAX_HEAT=5, MAX_HEALTH=100;
 const DEFAULT_MOTION_TAX_RATE=.05;
 
-let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8.2',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
+let fmBackend={client:null,user:null,ready:false,syncing:false,taxRate:DEFAULT_MOTION_TAX_RATE,gameVersion:'Alpha 0.8.5',error:null,ownerBank:null,isOwner:false,ownerDashboard:null,playerCrew:null,crewTerritories:[],publicCrews:[]};
 let player=null, screen='start', payload=null;
 let actionOriginScreen='home';
 
@@ -128,12 +128,12 @@ const CREW_RANKS=['Boss','Underboss','Lieutenant','Member'];
 const CREW_MAX_MEMBERS=10;
 
 const MOVES={
- quick_hustle:{name:'Quick Hustle',location:'corner_store',minutes:[45,75],base_success:88,cash:[35,85],xp:30,respect:1,heat:0,combat:false},
- house_hit:{name:'House Robbery',location:'apartments',minutes:[90,150],base_success:72,cash:[90,260],xp:60,respect:2,heat:1,combat:true,enemy:[8,24],requires_weapon:true,weapon_tier:1},
- store_hit:{name:'Store Robbery',location:'shopping_strip',minutes:[100,170],base_success:68,cash:[180,500],xp:95,respect:3,heat:1,combat:true,enemy:[15,30],requires_weapon:true,weapon_tier:2},
- rival_trap:{name:'Rival Trap House Hit',location:'rival_territory',minutes:[170,260],base_success:58,cash:[400,1100],xp:155,respect:5,heat:2,combat:true,enemy:[28,50],requires_weapon:true,weapon_tier:2},
- bank_heist:{name:'Bank Heist',location:'bank',minutes:[330,450],base_success:42,cash:[1800,5000],xp:360,respect:10,heat:3,combat:true,enemy:[45,70],requires_weapon:true,weapon_tier:4,requires_crew:1,requires_level:4},
- restricted_warehouse:{name:'Restricted Warehouse Heist',location:'military_facility',minutes:[390,510],base_success:32,cash:[4500,11000],xp:600,respect:16,heat:4,combat:true,enemy:[65,95],requires_weapon:true,weapon_tier:5,requires_crew:2,requires_level:6},
+ quick_hustle:{name:'Quick Hustle',location:'corner_store',minutes:[45,75],base_success:88,cash:[50,120],xp:30,respect:1,heat:0,combat:false},
+ house_hit:{name:'House Robbery',location:'apartments',minutes:[90,150],base_success:72,cash:[400,900],xp:75,respect:2,heat:1,combat:true,enemy:[8,24],requires_weapon:true,weapon_tier:1},
+ store_hit:{name:'Store Robbery',location:'shopping_strip',minutes:[100,170],base_success:68,cash:[900,1800],xp:120,respect:3,heat:1,combat:true,enemy:[15,30],requires_weapon:true,weapon_tier:2},
+ rival_trap:{name:'Rival Trap House Hit',location:'rival_territory',minutes:[170,260],base_success:58,cash:[2500,5500],xp:220,respect:5,heat:2,combat:true,enemy:[28,50],requires_weapon:true,weapon_tier:2},
+ bank_heist:{name:'Bank Heist',location:'bank',minutes:[330,450],base_success:42,cash:[18000,32000],xp:900,respect:10,heat:3,combat:true,enemy:[45,70],requires_weapon:true,weapon_tier:4,requires_crew:1,requires_level:4},
+ restricted_warehouse:{name:'Restricted Warehouse Heist',location:'military_facility',minutes:[390,510],base_success:32,cash:[32000,55000],xp:1400,respect:16,heat:4,combat:true,enemy:[65,95],requires_weapon:true,weapon_tier:5,requires_crew:2,requires_level:6},
 };
 
 // ===== ALPHA 0.7 QUICK MOVES / HUSTLE BOARD =====
@@ -141,18 +141,18 @@ const MOVES={
 // without replacing the deeper Make a Move, Employment, Territory, or City Life systems.
 const SIDE_HUSTLES={
  delivery_run:{name:'Quick Delivery',minutes:[35,60],cash:[45,95],xp:22,respect:0,success:94,heat:0,risk:'LOW',clean:true,requires_level:1},
- moving_help:{name:'Moving Help',minutes:[60,100],cash:[55,120],xp:30,respect:0,success:93,heat:0,risk:'LOW',clean:true,requires_level:1},
- car_detail:{name:'Quick Car Detail',minutes:[50,90],cash:[50,110],xp:28,respect:0,success:95,heat:0,risk:'LOW',clean:true,requires_level:1},
- warehouse_day:{name:'Warehouse Day Work',minutes:[75,120],cash:[65,135],xp:38,respect:0,success:92,heat:0,risk:'LOW',clean:true,requires_level:1},
- courier:{name:'Courier Run',minutes:[55,95],cash:[70,150],xp:38,respect:1,success:90,heat:0,risk:'MEDIUM',clean:true,requires_level:1},
- resell_flip:{name:'Marketplace Flip',minutes:[70,120],cash:[95,210],xp:48,respect:1,success:84,heat:0,risk:'MEDIUM',clean:true,requires_level:2,entry_cost:55},
- odd_job:{name:'Last-Minute Odd Job',minutes:[45,90],cash:[60,130],xp:34,respect:0,success:88,heat:0,risk:'MEDIUM',clean:true,requires_level:1},
- night_delivery:{name:'After-Hours Delivery',minutes:[60,110],cash:[120,280],xp:65,respect:2,success:76,heat:1,risk:'HIGH',clean:false,requires_level:2},
- risky_pickup:{name:'Risky Pickup',minutes:[80,140],cash:[180,390],xp:90,respect:3,success:68,heat:1,risk:'HIGH',clean:false,requires_level:3},
- high_risk:{name:'High-Risk Opportunity',minutes:[120,200],cash:[300,700],xp:135,respect:5,success:55,heat:2,risk:'EXTREME',clean:false,requires_level:4},
- check_scheme:{name:'Counterfeit Check Scheme',minutes:[90,150],cash:[220,520],xp:95,respect:2,success:62,heat:2,risk:'HIGH',clean:false,requires_level:3,entry_cost:75},
- bank_paper:{name:'Bank Paper Scam',minutes:[120,190],cash:[450,950],xp:150,respect:4,success:48,heat:3,risk:'EXTREME',clean:false,requires_level:5,entry_cost:140},
- fake_deposit:{name:'Fake Deposit Play',minutes:[75,130],cash:[180,420],xp:85,respect:2,success:66,heat:2,risk:'HIGH',clean:false,requires_level:3,entry_cost:60},
+ car_detail:{name:'Quick Car Detail',minutes:[50,90],cash:[55,115],xp:28,respect:0,success:95,heat:0,risk:'LOW',clean:true,requires_level:1},
+ moving_help:{name:'Moving Help',minutes:[60,100],cash:[70,140],xp:30,respect:0,success:93,heat:0,risk:'LOW',clean:true,requires_level:1},
+ warehouse_day:{name:'Warehouse Day Work',minutes:[75,120],cash:[85,165],xp:38,respect:0,success:92,heat:0,risk:'LOW',clean:true,requires_level:1},
+ odd_job:{name:'Last-Minute Odd Job',minutes:[45,90],cash:[95,185],xp:34,respect:0,success:88,heat:0,risk:'MEDIUM',clean:true,requires_level:1},
+ courier:{name:'Courier Run',minutes:[55,95],cash:[115,225],xp:38,respect:1,success:90,heat:0,risk:'MEDIUM',clean:true,requires_level:1},
+ resell_flip:{name:'Marketplace Flip',minutes:[70,120],cash:[150,300],xp:48,respect:1,success:84,heat:0,risk:'MEDIUM',clean:true,requires_level:2,entry_cost:55},
+ fake_deposit:{name:'Fake Deposit Play',minutes:[75,130],cash:[260,520],xp:85,respect:2,success:66,heat:2,risk:'HIGH',clean:false,requires_level:3,entry_cost:60},
+ night_delivery:{name:'After-Hours Delivery',minutes:[60,110],cash:[300,600],xp:65,respect:2,success:76,heat:1,risk:'HIGH',clean:false,requires_level:2},
+ risky_pickup:{name:'Risky Pickup',minutes:[80,140],cash:[450,850],xp:90,respect:3,success:68,heat:1,risk:'HIGH',clean:false,requires_level:3},
+ check_scheme:{name:'Counterfeit Check Scheme',minutes:[90,150],cash:[550,1000],xp:95,respect:2,success:62,heat:2,risk:'HIGH',clean:false,requires_level:3,entry_cost:75},
+ high_risk:{name:'High-Risk Opportunity',minutes:[120,200],cash:[750,1350],xp:135,respect:5,success:55,heat:2,risk:'EXTREME',clean:false,requires_level:4},
+ bank_paper:{name:'Bank Paper Scam',minutes:[120,190],cash:[1000,1800],xp:150,respect:4,success:48,heat:3,risk:'EXTREME',clean:false,requires_level:5,entry_cost:140},
 };
 
 
@@ -167,11 +167,11 @@ const SCAM_GEAR={
  access_key:{name:'Omni Access Key',price:3500,tier:3},workstation:{name:'Encrypted Workstation',price:6500,tier:4}
 };
 const FRAUD_JOBS={
- digital_flip:{name:'Digital Flip',tier:1,minutes:[70,110],cash:[140,300],success:82,heat:1,req:['laptop']},
- card_cashout:{name:'Card Cashout',tier:1,minutes:[90,140],cash:[260,600],success:70,heat:2,req:['laptop','reader','blank_media']},
- paper_play:{name:'Bank Paper Job',tier:2,minutes:[120,180],cash:[500,1200],success:58,heat:2,req:['laptop','printer']},
- atm_cashout:{name:'ATM Cashout',tier:3,minutes:[110,170],cash:[850,1900],success:48,heat:3,req:['laptop','access_key']},
- account_score:{name:'Account Score',tier:4,minutes:[160,240],cash:[1600,3800],success:38,heat:4,req:['workstation','access_key','printer']}
+ digital_flip:{name:'Digital Flip',tier:1,minutes:[70,110],cash:[250,500],success:82,heat:1,req:['laptop']},
+ card_cashout:{name:'Card Cashout',tier:1,minutes:[90,140],cash:[600,1200],success:70,heat:2,req:['laptop','reader','blank_media']},
+ paper_play:{name:'Bank Paper Job',tier:2,minutes:[120,180],cash:[1500,3000],success:58,heat:2,req:['laptop','printer']},
+ atm_cashout:{name:'ATM Cashout',tier:3,minutes:[110,170],cash:[3500,6500],success:48,heat:3,req:['laptop','access_key']},
+ account_score:{name:'Account Score',tier:4,minutes:[160,240],cash:[7500,14000],success:38,heat:4,req:['workstation','access_key','printer']}
 };
 const DAILY_OBJECTIVE_POOL=[
  ['Complete 2 Quick Moves',p=>(p.daily?.hustles_completed||0)>=2],['Work a legit shift',p=>(p.daily?.legit_shifts||0)>=1],
@@ -776,7 +776,7 @@ function renderHome(){
  ${menuCard(icon('garage'),'Garage','Vehicles & active ride','vehicles','garage')}
  ${menuCard(icon('property'),'Properties','Own multiple locations','properties','property')}
  ${menuCard(icon('stash'),'Trap Stash','Cash, inventory & weapons','stash','stash')}
- ${menuCard(icon('bank'),'Cash Reserve',`Protected cash ${money(player.bank_cash||0)}`,'bank','stash')}
+ ${menuCard(icon('bank'),'Emergency Fund',`Protected cash ${money(player.bank_cash||0)}`,'bank','stash')}
  ${menuCard('💼','Employment',workJob()?`${workJob().company} · ${currentWorkTier()?.title||workJob().title}`:'Get a legit job','employment','status')}
  ${menuCard(icon('profile'),'Player Profile','Career stats & records','profile','status')}
  ${menuCard(icon('upgrade'),'Trap Upgrades','Security, storage, condition','upgrades','upgrade')}
@@ -936,7 +936,7 @@ function canClockIn(){
 }
 function workEvent(){const a=['Your manager noticed you actually showed up prepared.','A coworker called out. Of course they did.','Something broke and everybody stared at it.','A customer asked for the manager.','Nothing caught fire. Great shift.','Management discovered you own free time.'];return a[randInt(0,a.length-1)]}
 function applyWorkMilestone(job,oldN,newN){const lines=[];for(const t of job.promotions)if(t.shifts>oldN&&t.shifts<=newN){if(t.bonus){player.employment.pending_pay+=t.bonus;lines.push(`Seniority bonus: +${money(t.bonus)} pending pay`)}if(t.shifts>0)lines.push(`Promotion: ${t.title} · ${money(t.pay)}/shift`)}return lines}
-function paydayIfDue(){const e=player.employment;if(!e||e.pending_pay<=0)return[];if(!(player.day%7===6||player.day-e.last_payday_day>=7))return[];const a=Math.floor(e.pending_pay);player.bank_cash=(player.bank_cash||0)+a;player.stats.total_earned+=a;player.stats.legit_pay_earned=(player.stats.legit_pay_earned||0)+a;e.pending_pay=0;e.week_shifts=0;e.last_payday_day=player.day;player.messages.unshift({from:'Payroll',text:`Payday deposit: ${money(a)}.`,day:player.day});return[`PAYDAY: ${money(a)} deposited to Cash Reserve.`]}
+function paydayIfDue(){const e=player.employment;if(!e||e.pending_pay<=0)return[];if(!(player.day%7===6||player.day-e.last_payday_day>=7))return[];const a=Math.floor(e.pending_pay);player.bank_cash=(player.bank_cash||0)+a;player.stats.total_earned+=a;player.stats.legit_pay_earned=(player.stats.legit_pay_earned||0)+a;e.pending_pay=0;e.week_shifts=0;e.last_payday_day=player.day;player.messages.unshift({from:'Payroll',text:`Payday deposit: ${money(a)}.`,day:player.day});return[`PAYDAY: ${money(a)} deposited to Emergency Fund.`]}
 function processMissedWorkDay(){const j=workJob();if(!j||player.employment.last_shift_day===player.day||player.time<j.start+j.duration)return[];player.employment.missed_shifts++;player.employment.writeups++;player.work_rep=Math.max(0,(player.work_rep||0)-2);const lines=[`MISSED SHIFT: ${j.company}`,`Write-ups: ${player.employment.writeups}/3`];if(player.employment.writeups>=3){player.employment.employment_history.unshift({company:j.company,title:currentWorkTier(j)?.title||j.title,shifts:player.employment.shifts_worked||0,status:'Fired'});player.messages.unshift({from:`${j.company} HR`,text:'After careful consideration, we have decided to promote you to customer.',day:player.day});player.employment.current_job=null;player.employment.writeups=0;player.employment.shifts_worked=0;lines.push('FIRED: Promoted to customer.')}return lines}
 function streetTemptationMessage(){if(!workJob()||Math.random()>.35)return null;const a=['You really finna work 9 hours for that check? I got something faster.','That whole week check could be one good night. Hit me back.','HR got you working hard. The city pays different after dark.'];const t=a[randInt(0,a.length-1)];player.messages.unshift({from:'Unknown Number',text:t,day:player.day});return t}
 
@@ -966,7 +966,7 @@ function renderEmployment(){
 
 function renderBank(){
  const inc=propertyIncomeEstimate(),up=dailyExpenseEstimate();
- return `${back()}<div class="card"><div class="section-title">CASH RESERVE</div>
+ return `${back()}<div class="card"><div class="section-title">EMERGENCY FUND</div>
  <div class="status-grid">${stat('On Person',money(player.cash_on_person))}${stat('Trap Cash',money(player.trap.cash))}${stat('Protected Reserve',money(player.bank_cash||0))}${stat('Bills Due',money(player.bills_due||0))}</div>
  <div class="muted" style="margin-top:10px">Reserve cash is protected from carried-cash arrest, robbery and hospital losses. Deposits and withdrawals are handled from your trap.</div></div>
  <div class="card"><div class="section-title">DAILY ECONOMY</div>
@@ -1028,7 +1028,7 @@ function renderHowTo(){return `${btn('← Start','start','','back')}<div class="
  <div class="result-line">Skills level naturally. Titles require a mix of level, respect and net worth.</div>
  <div class="result-line">Federal Motion is a long-term status, not an ending. Keep playing afterward.</div>
  <div class="result-line">Cloud saves and online stat syncing are active when CLOUD ONLINE appears.</div>
- <div class="result-line">City Life: reserve cash protects money from carried-cash losses. Property can create income, while crew, vehicles, phones and property create daily upkeep.</div>
+ <div class="result-line">City Life: emergency cash protects money from carried-cash losses. Property can create income, while crew, vehicles, phones and property create daily upkeep.</div>
  <div class="result-line">Unpaid bills carry forward. Random city events can help or hurt at the end of each day.</div>
  </div></div>`}
 
@@ -1036,7 +1036,7 @@ const TUTORIAL_STEPS=[
  {title:'WELCOME TO FEDERAL MOTION',text:'This first run is protected. Tutorial actions are freebies so you can learn the city without getting arrested, hurt or losing your starter progress.',tip:'Your real risk begins after the walkthrough.'},
  {title:'CHECK YOUR PHONE',text:'Your phone carries jobs, alerts, objectives, market information and city navigation. Better phones unlock more apps.',tip:'Check Alerts when Heat or warrants start climbing.'},
  {title:'GET YOUR FIRST MOTION',text:'Quick Moves are your starter lane. Clean work builds money with low pressure; risky lanes pay more but bring consequences.',tip:'The tutorial assumes your first starter hustle succeeds.'},
- {title:'PROTECT YOUR MONEY',text:'Cash on you can be exposed during bad outcomes. Your trap stash and Cash Reserve are safer places to keep progress.',tip:'Do not carry everything into a high-risk move.'},
+ {title:'PROTECT YOUR MONEY',text:'Cash on you can be exposed during bad outcomes. Your trap stash and Emergency Fund are safer places to keep progress.',tip:'Do not carry everything into a high-risk move.'},
  {title:'WORK A CLEAN SHIFT',text:'Employment gives scheduled clean income, Work Rep, promotions and a way to cool Heat. Shifts start no earlier than the 8:00 AM game day.',tip:'Clock in unarmed and within the grace window.'},
  {title:'HEAT & POLICE',text:'Heat never locks you out. Traffic stops can escalate into searches, warrants, surveillance, raids and arrests. Licenses change some stop outcomes.',tip:'At 5★ you can still make the move—you are accepting the pressure.'},
  {title:'SCAM CAREER',text:'The scam lane works like another career tree. Buy fictional black-market tools, build Scam Rep and unlock higher-tier abstract plays.',tip:'The game uses fictional requirements and chance rolls, not real-world instructions.'},
@@ -1052,6 +1052,7 @@ function renderWhatsNew(){
  return `<div class="card tutorial-card"><div class="hero-kicker">NEW IN ALPHA 0.8.1</div><h2>FLOW FIX</h2><div class="result-lines"><div class="result-line">🚔 Heat now escalates into traffic stops, searches, warrants, surveillance, raids and arrests. 5★ never blocks a move.</div><div class="result-line">🪪 Driver and carry licenses now affect police encounters.</div><div class="result-line">💻 Scam Career is now a progression lane with equipment, reputation and higher-tier fictional plays.</div><div class="result-line">📱 Phone Alerts track police pressure, work, city events and important changes.</div><div class="result-line">🎯 Daily + weekly objectives now pay claimable rewards.</div><div class="result-line">🚗 Vehicle reliability/repair and deeper property benefits are part of city progression.</div></div><div class="actions">${btn('SHOW WALKTHROUGH','whatsNewTutorial','','back')}${btn('ENTER CITY','whatsNewDone','','primary')}</div></div>${og}`;
 }
 const PATCH_NOTES_HISTORY=[
+ {version:'Alpha 0.8.5',title:'ECONOMY LADDER',notes:['Successful street sales now always clear acquisition cost','Drug profit ceilings rise by tier with Heroin highest','Scam Career payouts now rise sharply by tier with the final play highest','Quick Moves and major crimes have clearer risk/reward ladders','Higher requirements, capital and danger now lead to higher earning ceilings']},
  {version:'Alpha 0.8.1',title:'FLOW FIX',notes:['Escalating police pressure: stops, searches, warrants, raids and arrests','Driver and carry licenses','Scam Career equipment + reputation progression','Phone alerts','Daily and weekly objectives','Vehicle reliability and property utility','One-time OG appreciation reward for returning players']},
  {
   version:'Alpha 0.7',
@@ -1120,7 +1121,7 @@ const PATCH_NOTES_HISTORY=[
   version:'Alpha 0.4',
   title:'CITY LIFE',
   notes:[
-   'NEW: Cash Reserve lets players protect money instead of carrying everything.',
+   'NEW: Emergency Fund lets players protect money instead of carrying everything.',
    'NEW: Daily upkeep applies to vehicles, phones, crew and properties.',
    'NEW: Income-producing properties can generate passive income.',
    'NEW: Unpaid bills carry forward until paid.',
@@ -1787,15 +1788,15 @@ function handle(action){
   if(!amount)return;
   if(action==='crewBankDeposit'){
    const actual=Math.min(amount,player.bank_cash||0);
-   if(actual<=0){result('CREW BANK',['You have no protected reserve cash to deposit.']);return}
+   if(actual<=0){result('CREW BANK',['You have no protected emergency cash to deposit.']);return}
    crewRpc('fm_crew_bank_deposit',{p_amount:actual}).then(r=>{
     if(!r.ok){result('CREW BANK',[r.error]);return}
-    player.bank_cash-=actual;saveGame();result('CREW BANK',[`Deposited ${money(actual)} from your protected reserve.`]);
+    player.bank_cash-=actual;saveGame();result('CREW BANK',[`Deposited ${money(actual)} from your protected emergency fund.`]);
    });return
   }else{
    crewRpc('fm_crew_bank_withdraw',{p_amount:amount}).then(r=>{
     if(!r.ok){result('CREW BANK',[r.error]);return}
-    player.bank_cash=(player.bank_cash||0)+amount;saveGame();result('CREW BANK',[`Withdrew ${money(amount)} into your protected reserve.`]);
+    player.bank_cash=(player.bank_cash||0)+amount;saveGame();result('CREW BANK',[`Withdrew ${money(amount)} into your protected emergency fund.`]);
    });return
   }
  }
@@ -1877,7 +1878,34 @@ function handle(action){
  }
  if(action.startsWith('supplier:')){const n=action.split(':')[1];if((n==='Doc'&&player.respect<3)||(n==='Ghost'&&player.respect<8)){result('NOT YET',[n==='Doc'?'Doc: Come back when people know your name.':'Ghost isn’t interested yet.']);return}travelTo('supplier');if(screen==='result')return;screen='supplierShop';payload=n;render();return}
  if(action==='buyDrugGo'){const id=$('#buyDrug').value,g=parseFloat($('#buyGrams').value||0),p=supplierUnitPrice(id),cost=Math.floor(g*p),name=payload;if(g<=0)return;const charge=taxedPurchase(cost);if(!charge.ok){result('NOT ENOUGH CASH',[`Need ${money(charge.total)} including ${money(charge.tax)} City Tax.`]);return}player.carried_drugs[id]+=g;player.supplier_trust[name]++;player.daily.supplier_buys=(player.daily.supplier_buys||0)+1;addSkillXP('charisma',4);advanceTime(30);if(screen==='result')return;result('DEAL COMPLETE',[`${DRUGS[id].name}: +${g.toFixed(1)}g`,`Base: -${money(charge.base)}`,`City Tax: -${money(charge.tax)}`,`Total: -${money(charge.total)}`]);return}
- if(action==='streetGo'){const id=$('#streetDrug').value,g=Math.min(parseFloat($('#streetGrams').value||0),player.carried_drugs[id]);if(g<=0)return;const d=DRUGS[id],zoneStreet=territoryBonusPercent('street'),pay=Math.floor(g*d.base_value*player.market[id]*(.68+Math.random()*.20)*(1+zoneStreet/100)),chance=Math.max(28,92-d.risk*4-heatPenalty()+skillLevel('street'));advanceTime(randInt(35,65));if(screen==='result')return;player.stats.moves++;addSkillXP('street',12);if(randInt(1,100)<=chance){player.carried_drugs[id]-=g;player.cash_on_person+=pay;player.stats.total_earned+=pay;const xp=Math.max(10,Math.floor(g*2));player.xp+=xp;if(randInt(1,100)<=d.risk*8)player.heat=clamp(player.heat+1,0,5);player.stats.successful_moves++;player.daily.successes++;const lvl=updateLevel();result('MOVE SUCCESSFUL',[`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(lvl?[lvl]:[])])}else{player.stats.failed_moves++;player.daily.failures++;player.heat=clamp(player.heat+1,0,5);result('MOVE WENT BAD',['The opportunity fell apart.','No inventory was lost.','Heat: +1★'])}return}
+ if(action==='streetGo'){
+  const id=$('#streetDrug').value,g=Math.min(parseFloat($('#streetGrams').value||0),player.carried_drugs[id]);if(g<=0)return;
+  const d=DRUGS[id],zoneStreet=territoryBonusPercent('street');
+  // Economy 0.8.5: every successful street sale is profitable, and higher drug tiers have higher profit ceilings.
+  // Profit bands are based on supplier cost + City Tax so a successful move never pays less than acquisition cost.
+  const profitBands={
+    weed:[.18,.28],shrooms:[.22,.34],pills:[.24,.36],lean:[.26,.38],
+    cocaine:[.32,.48],meth:[.38,.58],heroin:[.48,.72]
+  };
+  const [minProfit,maxProfit]=profitBands[id]||[.18,.28];
+  const unitCost=supplierUnitPrice(id)*(1+fmBackend.taxRate);
+  // Bulk still compresses the margin toward the bottom of the band, but can never turn a successful sale into a loss.
+  const bulkPressure=clamp(Math.log10(Math.max(1,g/100))*0.12,0,.75);
+  const rolledProfit=minProfit+(maxProfit-minProfit)*Math.random();
+  const profitRate=Math.max(minProfit,rolledProfit-(maxProfit-minProfit)*bulkPressure);
+  const pay=Math.floor(g*unitCost*(1+profitRate)*(1+zoneStreet/100));
+  const chance=Math.max(24,92-d.risk*4-heatPenalty()+skillLevel('street')-Math.min(18,Math.floor(Math.log10(Math.max(1,g))*4)));
+  advanceTime(randInt(35,65));if(screen==='result')return;player.stats.moves++;addSkillXP('street',12);
+  if(randInt(1,100)<=chance){
+    player.carried_drugs[id]-=g;player.cash_on_person+=pay;player.stats.total_earned+=pay;
+    const xp=Math.min(1800,Math.max(15,Math.floor(45*Math.sqrt(g))));player.xp+=xp;
+    const bulkHeat=g>=2000?2:g>=500?1:0;const riskHeat=(randInt(1,100)<=d.risk*10?1:0);const heatGain=Math.min(3,bulkHeat+riskHeat);
+    player.heat=clamp(player.heat+heatGain,0,5);player.stats.successful_moves++;player.daily.successes++;
+    const lvl=updateLevel();result('MOVE SUCCESSFUL',[`Moved: ${g.toFixed(1)}g ${d.name}`,`Cash: +${money(pay)}`,`XP: +${xp}`,...(heatGain?[`Heat: +${heatGain}★`]:[]),...(lvl?[lvl]:[])])
+  }else{
+    player.stats.failed_moves++;player.daily.failures++;const heatGain=g>=1000?2:1;player.heat=clamp(player.heat+heatGain,0,5);result('MOVE WENT BAD',['The opportunity fell apart.','No inventory was lost.',`Heat: +${heatGain}★`])
+  }return
+}
  if(action.startsWith('buyWeapon:')){const id=action.split(':')[1],w=WEAPONS[id],c=taxedPurchase(w.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including City Tax.`]);return}player.weapon_inventory.push({id,condition:w.condition,upgrades:0});advanceTime(30);result('PURCHASE COMPLETE',[`Purchased ${w.name}.`,`Base: -${money(c.base)}`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action.startsWith('buyArmor:')){const id=action.split(':')[1],a=ARMOR[id],c=taxedPurchase(a.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)} including City Tax.`]);return}player.armor_inventory.push(id);advanceTime(25);result('PURCHASE COMPLETE',[`Purchased ${a.name}.`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action.startsWith('buyPhone:')){const id=action.split(':')[1],p=PHONES[id];if(PHONES[player.phone_id].tier>=p.tier)return;const c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.phone_id=id;addSkillXP('business',10);result('PHONE UPGRADED',[`New phone: ${p.name}`,`City Tax: -${money(c.tax)}`,`Apps unlocked: ${p.apps.join(', ')}`]);return}
@@ -1889,7 +1917,7 @@ function handle(action){
  if(action.startsWith('buyVehicle:')){const id=action.split(':')[1],v=VEHICLES[id],c=taxedPurchase(v.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.vehicles.push(id);player.vehicle_condition[id]=v.reliability;player.active_vehicle=id;result('VEHICLE PURCHASED',[`${v.name} added to your garage.`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action.startsWith('buyProperty:')){const id=action.split(':')[1],p=PROPERTIES[id],c=taxedPurchase(p.price);if(!c.ok){result('NOT ENOUGH CASH',[`Need ${money(c.total)}.`]);return}player.properties.push(id);result('PROPERTY PURCHASED',[`${p.name} is now yours.`,`City Tax: -${money(c.tax)}`,`Total: -${money(c.total)}`]);return}
  if(action==='bankDeposit'||action==='bankWithdraw'){
-  if(player.location!=='trap'){result('CASH RESERVE',['Return to your trap to move reserve cash.']);return}
+  if(player.location!=='trap'){result('EMERGENCY FUND',['Return to your trap to move emergency cash.']);return}
   let a=Math.max(0,Math.floor(Number($('#bankAmount')?.value||0)));
   if(a<=0)return;
   if(action==='bankDeposit'){
